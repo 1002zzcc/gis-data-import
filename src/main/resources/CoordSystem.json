@@ -1,0 +1,27 @@
+{
+  "WenZhou2000": {
+    "IsBLCoord": false,
+    "EllipsoidType": "CGCS2000",
+    "L0": 120.666666667
+  },
+  "CGCS2000": {
+    "IsBLCoord": true,
+    "EllipsoidType": "CGCS2000",
+    "L0": 120
+  },
+  "CGCS2000XY": {
+    "IsBLCoord": false,
+    "EllipsoidType": "CGCS2000",
+    "L0": 120
+  },
+  "WenZhouCity": {
+    "IsBLCoord": false,
+    "EllipsoidType": "Beijing1954",
+    "L0": 120.666666667
+  },
+  "Beijing1954": {
+    "IsBLCoord": false,
+    "EllipsoidType": "Beijing1954",
+    "L0": 120
+  }
+}

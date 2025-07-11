@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>GIS Shapefile 导入工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="file"], input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>GIS Shapefile 导入工具</h1>
+
+    <div>
+        <h2>从ZIP文件上传</h2>
+        <div class="form-group">
+            <label for="zipFile">选择ZIP文件:</label>
+            <input type="file" id="zipFile" accept=".zip">
+        </div>
+        <button id="uploadBtn">上传并处理</button>
+    </div>
+    <div style="margin-top: 30px;">
+        <h2>从服务器路径读取</h2>
+        <div class="form-group">
+            <label for="filePath">文件路径:</label>
+            <input type="text" id="filePath" placeholder="例如: D:\xinyu_shixi\废弃节点.zip">
+        </div>
+        <button id="processPathBtn">处理</button>
+    </div>
+
+    <div id="result" class="hidden">
+        <h3>处理结果</h3>
+        <pre id="resultContent"></pre>
+    </div>
+
+    <script>
+        document.getElementById('uploadBtn').addEventListener('click', function() {
+            const fileInput = document.getElementById('zipFile');
+            if (!fileInput.files[0]) {
+                alert('请选择一个ZIP文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            fetch('/api/shapefiles/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayResult(data);
+            })
+            .catch(error => {
+                displayResult({success: false, message: '上传失败: ' + error.message});
+            });
+        });
+
+        document.getElementById('processPathBtn').addEventListener('click', function() {
+            const filePath = document.getElementById('filePath').value;
+            if (!filePath) {
+                alert('请输入文件路径');
+                return;
+            }
+
+            fetch('/api/shapefiles/process?filePath=' + encodeURIComponent(filePath), {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayResult(data);
+            })
+            .catch(error => {
+                displayResult({success: false, message: '处理失败: ' + error.message});
+            });
+        });
+
+        function displayResult(data) {
+            const resultDiv = document.getElementById('result');
+            const resultContent = document.getElementById('resultContent');
+            resultDiv.classList.remove('hidden');
+            resultContent.textContent = JSON.stringify(data, null, 2);
+
+            if (data.success) {
+                resultDiv.style.borderColor = '#2ecc71';
+            } else {
+                resultDiv.style.borderColor = '#e74c3c';
+            }
+        }
+    </script>
+</body>
+</html>
