@@ -1,0 +1,94 @@
+server:
+  port: 8080
+
+spring:
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  datasource:
+    dynamic:
+      primary: master
+      datasource:
+        master:
+          url: jdbc:postgresql://192.168.1.250:5438/resourcemanage
+          username: root
+          password: root
+          driver-class-name: org.postgresql.Driver
+          type: com.alibaba.druid.pool.DruidDataSource
+        slave:
+          url: jdbc:postgresql://192.168.1.250:5438/rights?stringtype=unspecified&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+          username: root
+          password: root
+          driver-class-name: org.postgresql.Driver
+          type: com.alibaba.druid.pool.DruidDataSource
+      druid:
+        initial-size: 20
+        min-idle: 5
+        max-active: 200
+        max-wait: 6000000
+        time-between-eviction-runs-millis: 6000000
+        min-evictable-idle-time-millis: 30000000
+        validation-query: SELECT 1
+        test-while-idle: true
+        test-on-borrow: true
+        test-on-return: true
+        pool-prepared-statements: true
+        
+        # 监控配置
+        stat-view-servlet:
+          enabled: true   # 启用监控页面
+          url-pattern: /druid/*  # 访问路径
+          login-username: admin  # 监控页登录账号
+          login-password: admin  # 监控页密码
+          reset-enable: false    # 禁用重置按钮
+  servlet:
+    multipart:
+      max-file-size: 20000MB
+      max-request-size: 20000MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    type-aliases-package: com.zjxy.gisdataimport.entity
+    mapper-scan-type: ANNOTATION
+    #设置当查询结果值为null时，同样映射该查询字段给map。
+    call-setters-on-nulls: true
+  global-config:
+    db-config:
+      #设置updateById能够将null更新到数据库
+      update-strategy: IGNORED
+
+# GIS相关配置
+gis:
+  # 坐标转换配置
+  coordinate:
+    transform:
+      enabled: true
+      source-coord-system: CGCS2000
+      target-coord-system: CGCS2000XY
+      failure-strategy: KEEP_ORIGINAL
+  # 批量处理配置
+  batch:
+    size: 1000
+    thread-pool-size: 4
+    max-queue-size: 10000
+  # 性能监控配置
+  performance:
+    monitor:
+      enabled: true
+      log-interval: 10000
+
+# 文件上传配置
+file:
+  upload:
+    path: /tmp/gis-upload
+    max-size: 500MB
+
+logging:
+  level:
+    com.zjxy.gisdataimport: DEBUG
+    org.mybatis: DEBUG
+    java.sql: DEBUG

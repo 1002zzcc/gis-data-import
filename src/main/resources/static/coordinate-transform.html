@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>坐标转换工具</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .section h2 {
+            color: #555;
+            margin-top: 0;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #28a745;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .success {
+            color: #28a745;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .result-section {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .coord-input {
+            display: flex;
+            gap: 10px;
+        }
+        .coord-input input {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ 坐标转换工具</h1>
+        
+        <!-- 导航菜单 -->
+        <div style="margin-bottom: 30px; padding: 15px; background-color: #ecf0f1; border-radius: 5px;">
+            <h3>功能导航</h3>
+            <a href="index.html" style="margin-right: 20px; color: #28a745; text-decoration: none;">🏠 基础上传</a>
+            <a href="template-upload.html" style="margin-right: 20px; color: #28a745; text-decoration: none;">📋 模板上传</a>
+            <a href="coordinate-transform.html" style="color: #28a745; text-decoration: none; font-weight: bold;">🗺️ 坐标转换</a>
+        </div>
+
+        <!-- 坐标转换区域 -->
+        <div class="section">
+            <h2>🔄 坐标系转换</h2>
+            <div class="form-group">
+                <label>源坐标系:</label>
+                <select id="sourceCoordSystem">
+                    <option value="CGCS2000">CGCS2000</option>
+                    <option value="Beijing1954">Beijing1954</option>
+                    <option value="Xian1980">Xian1980</option>
+                    <option value="WGS1984">WGS1984</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>目标坐标系:</label>
+                <select id="targetCoordSystem">
+                    <option value="CGCS2000XY">CGCS2000XY</option>
+                    <option value="Beijing1954XY">Beijing1954XY</option>
+                    <option value="Xian1980XY">Xian1980XY</option>
+                    <option value="WGS1984XY">WGS1984XY</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>输入坐标 (X, Y):</label>
+                <div class="coord-input">
+                    <input type="number" id="inputX" placeholder="X坐标" step="any">
+                    <input type="number" id="inputY" placeholder="Y坐标" step="any">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>中央经线1 (L1):</label>
+                <input type="number" id="l1" placeholder="例如: 117" step="any" value="117">
+            </div>
+            <div class="form-group">
+                <label>中央经线2 (L2):</label>
+                <input type="number" id="l2" placeholder="例如: 117" step="any" value="117">
+            </div>
+            <div class="form-group">
+                <button onclick="transformCoordinate()">转换坐标</button>
+                <button onclick="clearInputs()">清空输入</button>
+            </div>
+        </div>
+
+        <!-- 批量转换区域 -->
+        <div class="section">
+            <h2>📊 批量坐标转换</h2>
+            <div class="form-group">
+                <label>批量坐标输入 (每行一个坐标对，格式: X,Y):</label>
+                <textarea id="batchCoords" rows="8" placeholder="例如:
+116.3974, 39.9093
+121.4737, 31.2304
+113.2644, 23.1291"></textarea>
+            </div>
+            <div class="form-group">
+                <button onclick="batchTransform()">批量转换</button>
+            </div>
+        </div>
+
+        <!-- 结果显示区域 -->
+        <div class="result-section">
+            <h2>📋 转换结果</h2>
+            <div id="resultContainer">
+                <p>等待转换结果...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 单个坐标转换
+        async function transformCoordinate() {
+            const x = document.getElementById('inputX').value;
+            const y = document.getElementById('inputY').value;
+            const source = document.getElementById('sourceCoordSystem').value;
+            const target = document.getElementById('targetCoordSystem').value;
+            const l1 = document.getElementById('l1').value;
+            const l2 = document.getElementById('l2').value;
+
+            if (!x || !y) {
+                showError('请输入X和Y坐标');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/coordinate/transform', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        x: parseFloat(x),
+                        y: parseFloat(y),
+                        source: source,
+                        target: target,
+                        l1: parseFloat(l1) || 117,
+                        l2: parseFloat(l2) || 117
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess('坐标转换成功！');
+                    displayResult({
+                        type: '单个坐标转换',
+                        input: `(${x}, ${y})`,
+                        output: `(${result.data.x}, ${result.data.y})`,
+                        sourceSystem: source,
+                        targetSystem: target,
+                        result: result
+                    });
+                } else {
+                    showError('转换失败: ' + result.message);
+                }
+            } catch (error) {
+                showError('转换失败: ' + error.message);
+            }
+        }
+
+        // 批量坐标转换
+        async function batchTransform() {
+            const batchText = document.getElementById('batchCoords').value;
+            if (!batchText.trim()) {
+                showError('请输入批量坐标数据');
+                return;
+            }
+
+            const source = document.getElementById('sourceCoordSystem').value;
+            const target = document.getElementById('targetCoordSystem').value;
+            const l1 = document.getElementById('l1').value;
+            const l2 = document.getElementById('l2').value;
+
+            // 解析坐标数据
+            const lines = batchText.trim().split('\n');
+            const coordinates = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line) {
+                    const parts = line.split(',');
+                    if (parts.length >= 2) {
+                        const x = parseFloat(parts[0].trim());
+                        const y = parseFloat(parts[1].trim());
+                        if (!isNaN(x) && !isNaN(y)) {
+                            coordinates.push({ x, y });
+                        }
+                    }
+                }
+            }
+
+            if (coordinates.length === 0) {
+                showError('没有找到有效的坐标数据');
+                return;
+            }
+
+            try {
+                const results = [];
+                for (const coord of coordinates) {
+                    const response = await fetch('/api/coordinate/transform', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            x: coord.x,
+                            y: coord.y,
+                            source: source,
+                            target: target,
+                            l1: parseFloat(l1) || 117,
+                            l2: parseFloat(l2) || 117
+                        })
+                    });
+
+                    const result = await response.json();
+                    results.push({
+                        input: coord,
+                        output: result.success ? result.data : null,
+                        success: result.success,
+                        error: result.success ? null : result.message
+                    });
+                }
+
+                showSuccess(`批量转换完成！成功转换 ${results.filter(r => r.success).length}/${results.length} 个坐标`);
+                displayResult({
+                    type: '批量坐标转换',
+                    sourceSystem: source,
+                    targetSystem: target,
+                    totalCount: results.length,
+                    successCount: results.filter(r => r.success).length,
+                    results: results
+                });
+
+            } catch (error) {
+                showError('批量转换失败: ' + error.message);
+            }
+        }
+
+        // 清空输入
+        function clearInputs() {
+            document.getElementById('inputX').value = '';
+            document.getElementById('inputY').value = '';
+            document.getElementById('batchCoords').value = '';
+        }
+
+        // 显示成功消息
+        function showSuccess(message) {
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = `<div class="success">${message}</div>`;
+        }
+
+        // 显示错误消息
+        function showError(message) {
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // 显示转换结果
+        function displayResult(result) {
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = `
+                <div class="success">转换完成！</div>
+                <pre>${JSON.stringify(result, null, 2)}</pre>
+            `;
+        }
+    </script>
+</body>
+</html>

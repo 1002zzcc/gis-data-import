@@ -79,6 +79,17 @@ public class CoordinateTransformService {
     }
 
     /**
+     * 使用指定坐标系转换几何数据（模板化转换的别名方法）
+     * @param geometryWkt 原始几何数据的WKT字符串
+     * @param sourceCoordSystem 源坐标系
+     * @param targetCoordSystem 目标坐标系
+     * @return 转换后的WKT字符串
+     */
+    public String transformGeometryWithCoordSystems(String geometryWkt, String sourceCoordSystem, String targetCoordSystem) {
+        return transformGeometry(geometryWkt, sourceCoordSystem, targetCoordSystem);
+    }
+
+    /**
      * 批量转换几何数据
      * @param geometryWkts 几何数据WKT字符串列表
      * @param sourceCoordSystem 源坐标系

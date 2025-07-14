@@ -1,0 +1,93 @@
+server:
+  port: 8080
+
+spring:
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  datasource:
+    dynamic:
+      primary: master
+      datasource:
+        master:
+          url: jdbc:postgresql://172.31.221.8:54321/resourcemanage
+          username: xych
+          password: Xych-123
+          driver-class-name: org.postgresql.Driver
+          type: com.alibaba.druid.pool.DruidDataSource
+        slave:
+          url: jdbc:postgresql://172.31.221.8:54321/rights?stringtype=unspecified&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+          username: xych
+          password: Xych-123
+          driver-class-name: org.postgresql.Driver
+          type: com.alibaba.druid.pool.DruidDataSource
+      druid:
+        initialSize: 20
+        minIdle: 5
+        maxActive: 200
+        maxWait: 6000000
+        timeBetweenEvictionRunsMillis: 6000000
+        minEvictableIdleTimeMillis: 30000000
+        validationQuery: SELECT 1
+        testWhileIdle: true
+        testOnBorrow: true
+        testOnReturn: true
+        poolPreparedStatements: true
+
+        # 监控配置
+        stat-view-servlet:
+          enabled: true   # 启用监控页面
+          url-pattern: /druid/*  # 访问路径
+          login-username: admin  # 监控页登录账号
+          login-password: admin  # 监控页密码
+          reset-enable: false    # 禁用重置按钮
+  servlet:
+    multipart:
+      max-file-size: 20000MB
+      max-request-size: 20000MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+mybatis-plus:
+  configuration:
+    type-aliases-package: com.zjxy.gisdataimport.entity
+    mapper-scan-type: ANNOTATION
+    #设置当查询结果值为null时，同样映射该查询字段给map。
+    call-setters-on-nulls: true
+  global-config:
+    db-config:
+      #设置updateById能够将null更新到数据库
+      update-strategy: IGNORED
+
+# GIS相关配置
+gis:
+  # 坐标转换配置
+  coordinate:
+    transform:
+      enabled: true
+      source-coord-system: CGCS2000
+      target-coord-system: CGCS2000XY
+      failure-strategy: KEEP_ORIGINAL
+  # 批量处理配置
+  batch:
+    size: 2000
+    thread-pool-size: 8
+    max-queue-size: 20000
+  # 性能监控配置
+  performance:
+    monitor:
+      enabled: true
+      log-interval: 5000
+
+# 文件上传配置
+file:
+  upload:
+    path: /data/gis-upload
+    max-size: 1GB
+
+logging:
+  level:
+    com.zjxy.gisdataimport: INFO
+    org.mybatis: WARN
+    java.sql: WARN

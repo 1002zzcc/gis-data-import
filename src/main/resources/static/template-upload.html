@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基于模板的Shapefile数据导入</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .section h2 {
+            color: #555;
+            margin-top: 0;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .success {
+            color: #28a745;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .template-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+        }
+        .template-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .template-item:hover {
+            background-color: #f8f9fa;
+        }
+        .template-item.selected {
+            background-color: #007bff;
+            color: white;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #28a745;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .result-section {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗺️ 基于模板的Shapefile数据导入系统</h1>
+
+        <!-- 导航菜单 -->
+        <div style="margin-bottom: 30px; padding: 15px; background-color: #ecf0f1; border-radius: 5px;">
+            <h3>功能导航</h3>
+            <a href="index.html" style="margin-right: 20px; color: #007bff; text-decoration: none;">🏠 基础上传</a>
+            <a href="template-upload.html" style="margin-right: 20px; color: #007bff; text-decoration: none; font-weight: bold;">📋 模板上传</a>
+            <a href="coordinate-transform.html" style="color: #007bff; text-decoration: none;">🗺️ 坐标转换</a>
+        </div>
+
+        <!-- 模板管理区域 -->
+        <div class="section">
+            <h2>📋 模板管理</h2>
+            <div class="form-group">
+                <button onclick="loadTemplates()">刷新模板列表</button>
+                <button onclick="showCreateTemplateForm()">创建新模板</button>
+            </div>
+            <div id="templateList" class="template-list">
+                <p>点击"刷新模板列表"加载可用模板...</p>
+            </div>
+            <div class="form-group">
+                <label>选中的模板ID:</label>
+                <input type="number" id="selectedTemplateId" placeholder="请从上方列表选择模板" readonly>
+            </div>
+        </div>
+
+        <!-- 文件上传区域 -->
+        <div class="section">
+            <h2>📁 Shapefile文件上传</h2>
+            <div class="form-group">
+                <label for="shapefileInput">选择Shapefile ZIP文件:</label>
+                <input type="file" id="shapefileInput" accept=".zip" />
+            </div>
+            <div class="form-group">
+                <button onclick="uploadWithTemplate()" id="uploadBtn">使用模板上传并处理</button>
+                <button onclick="uploadOriginal()" id="uploadOriginalBtn">原始方式上传</button>
+            </div>
+            <div class="progress" id="progressContainer" style="display: none;">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+        </div>
+
+        <!-- 路径处理区域 -->
+        <div class="section">
+            <h2>📂 从路径处理文件</h2>
+            <div class="form-group">
+                <label for="filePathInput">文件路径:</label>
+                <input type="text" id="filePathInput" placeholder="例如: D:/data/shapefile.zip" />
+            </div>
+            <div class="form-group">
+                <button onclick="processFromPath()">从路径处理</button>
+            </div>
+        </div>
+
+        <!-- 结果显示区域 -->
+        <div class="result-section">
+            <h2>📊 处理结果</h2>
+            <div id="resultContainer">
+                <p>等待处理结果...</p>
+            </div>
+        </div>
+
+        <!-- 创建模板表单（隐藏） -->
+        <div id="createTemplateForm" class="section" style="display: none;">
+            <h2>➕ 创建新模板</h2>
+            <div class="form-group">
+                <label for="templateNameZh">模板中文名称:</label>
+                <input type="text" id="templateNameZh" placeholder="例如: 城市POI点模板" />
+            </div>
+            <div class="form-group">
+                <label for="templateNameEn">模板英文名称:</label>
+                <input type="text" id="templateNameEn" placeholder="例如: City POI Template" />
+            </div>
+            <div class="form-group">
+                <label for="templateTableName">目标表名:</label>
+                <input type="text" id="templateTableName" placeholder="例如: geo_features" />
+            </div>
+            <div class="form-group">
+                <label for="templateType">几何类型:</label>
+                <select id="templateType">
+                    <option value="1">纯文本</option>
+                    <option value="2">点表</option>
+                    <option value="3">线表</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="templateCoordTransform">是否坐标转换:</label>
+                <select id="templateCoordTransform">
+                    <option value="false">否</option>
+                    <option value="true">是</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="templateSourceCoord">源坐标系:</label>
+                <input type="text" id="templateSourceCoord" placeholder="例如: CGCS2000" />
+            </div>
+            <div class="form-group">
+                <label for="templateTargetCoord">目标坐标系:</label>
+                <input type="text" id="templateTargetCoord" placeholder="例如: CGCS2000XY" />
+            </div>
+            <div class="form-group">
+                <label for="templateFieldMapping">字段映射配置 (JSON格式):</label>
+                <textarea id="templateFieldMapping" rows="10" placeholder='[{"shpFieldName": "NAME", "fieldName": "feature_name", "dataType": "String", "required": true}]'></textarea>
+            </div>
+            <div class="form-group">
+                <button onclick="createTemplate()">创建模板</button>
+                <button onclick="hideCreateTemplateForm()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedTemplateId = null;
+
+        // 加载模板列表
+        async function loadTemplates() {
+            try {
+                const response = await fetch('/api/template-shapefile/templates');
+                const result = await response.json();
+
+                const templateList = document.getElementById('templateList');
+
+                if (result.success && result.data.length > 0) {
+                    templateList.innerHTML = result.data.map(template =>
+                        `<div class="template-item" onclick="selectTemplate(${template.id}, '${template.nameZh}')">
+                            <strong>ID: ${template.id}</strong> - ${template.nameZh}<br>
+                            <small>类型: ${getGeometryTypeName(template.type)} | 表名: ${template.tableName}</small>
+                        </div>`
+                    ).join('');
+                } else {
+                    templateList.innerHTML = '<p>暂无可用模板</p>';
+                }
+            } catch (error) {
+                showError('加载模板列表失败: ' + error.message);
+            }
+        }
+
+        // 选择模板
+        function selectTemplate(templateId, templateName) {
+            selectedTemplateId = templateId;
+            document.getElementById('selectedTemplateId').value = templateId;
+
+            // 更新选中状态
+            document.querySelectorAll('.template-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            event.target.closest('.template-item').classList.add('selected');
+
+            showSuccess(`已选择模板: ${templateName} (ID: ${templateId})`);
+        }
+
+        // 获取几何类型名称
+        function getGeometryTypeName(type) {
+            const types = {1: '纯文本', 2: '点表', 3: '线表'};
+            return types[type] || '未知';
+        }
+
+        // 使用模板上传文件
+        async function uploadWithTemplate() {
+            if (!selectedTemplateId) {
+                showError('请先选择一个模板');
+                return;
+            }
+
+            const fileInput = document.getElementById('shapefileInput');
+            if (!fileInput.files[0]) {
+                showError('请选择一个ZIP文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('templateId', selectedTemplateId);
+
+            try {
+                showProgress(true);
+                updateProgress(20);
+
+                const response = await fetch('/api/template-shapefile/upload-with-template', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                updateProgress(80);
+                const result = await response.json();
+                updateProgress(100);
+
+                if (result.success) {
+                    showSuccess('文件处理成功！');
+                    displayResult(result);
+                } else {
+                    showError('处理失败: ' + result.message);
+                }
+            } catch (error) {
+                showError('上传失败: ' + error.message);
+            } finally {
+                showProgress(false);
+            }
+        }
+
+        // 原始方式上传
+        async function uploadOriginal() {
+            const fileInput = document.getElementById('shapefileInput');
+            if (!fileInput.files[0]) {
+                showError('请选择一个ZIP文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                showProgress(true);
+                updateProgress(20);
+
+                const response = await fetch('/api/shapefiles/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                updateProgress(80);
+                const result = await response.json();
+                updateProgress(100);
+
+                if (result.success) {
+                    showSuccess('文件处理成功！');
+                    displayResult(result);
+                } else {
+                    showError('处理失败: ' + result.message);
+                }
+            } catch (error) {
+                showError('上传失败: ' + error.message);
+            } finally {
+                showProgress(false);
+            }
+        }
+
+        // 从路径处理文件
+        async function processFromPath() {
+            const filePath = document.getElementById('filePathInput').value;
+            if (!filePath) {
+                showError('请输入文件路径');
+                return;
+            }
+
+            if (!selectedTemplateId) {
+                showError('请先选择一个模板');
+                return;
+            }
+
+            try {
+                showProgress(true);
+                updateProgress(30);
+
+                const response = await fetch('/api/template-shapefile/process-with-template', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `filePath=${encodeURIComponent(filePath)}&templateId=${selectedTemplateId}`
+                });
+
+                updateProgress(80);
+                const result = await response.json();
+                updateProgress(100);
+
+                if (result.success) {
+                    showSuccess('文件处理成功！');
+                    displayResult(result);
+                } else {
+                    showError('处理失败: ' + result.message);
+                }
+            } catch (error) {
+                showError('处理失败: ' + error.message);
+            } finally {
+                showProgress(false);
+            }
+        }
+
+        // 显示/隐藏创建模板表单
+        function showCreateTemplateForm() {
+            document.getElementById('createTemplateForm').style.display = 'block';
+        }
+
+        function hideCreateTemplateForm() {
+            document.getElementById('createTemplateForm').style.display = 'none';
+        }
+
+        // 创建模板
+        async function createTemplate() {
+            const templateData = {
+                nameZh: document.getElementById('templateNameZh').value,
+                nameEn: document.getElementById('templateNameEn').value,
+                tableName: document.getElementById('templateTableName').value,
+                type: parseInt(document.getElementById('templateType').value),
+                isZh: document.getElementById('templateCoordTransform').value === 'true',
+                originalCoordinateSystem: document.getElementById('templateSourceCoord').value,
+                targetCoordinateSystem: document.getElementById('templateTargetCoord').value,
+                templateType: 'shp',
+                dataBase: 'gisdb',
+                inOrOut: 'in'
+            };
+
+            // 解析字段映射
+            try {
+                const fieldMapping = document.getElementById('templateFieldMapping').value;
+                if (fieldMapping) {
+                    templateData.map = JSON.parse(fieldMapping);
+                }
+            } catch (error) {
+                showError('字段映射配置JSON格式错误');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/template-shapefile/templates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(templateData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess('模板创建成功！模板ID: ' + result.templateId);
+                    hideCreateTemplateForm();
+                    loadTemplates(); // 重新加载模板列表
+                } else {
+                    showError('创建失败: ' + result.message);
+                }
+            } catch (error) {
+                showError('创建失败: ' + error.message);
+            }
+        }
+
+        // 显示进度条
+        function showProgress(show) {
+            document.getElementById('progressContainer').style.display = show ? 'block' : 'none';
+            if (!show) {
+                updateProgress(0);
+            }
+        }
+
+        // 更新进度
+        function updateProgress(percent) {
+            document.getElementById('progressBar').style.width = percent + '%';
+        }
+
+        // 显示成功消息
+        function showSuccess(message) {
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = `<div class="success">${message}</div>`;
+        }
+
+        // 显示错误消息
+        function showError(message) {
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // 显示处理结果
+        function displayResult(result) {
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.innerHTML = `
+                <div class="success">处理完成！</div>
+                <pre>${JSON.stringify(result, null, 2)}</pre>
+            `;
+        }
+
+        // 页面加载时自动加载模板列表
+        window.onload = function() {
+            loadTemplates();
+        };
+    </script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 package com.zjxy.gisdataimport.service.Impl;
 
 import com.zjxy.gisdataimport.entity.GeoFeatureEntity;
+import com.zjxy.gisdataimport.entity.GisManageTemplate;
 import com.zjxy.gisdataimport.shap.ShapefileReader;
 import org.geotools.data.DataStore;
 import org.geotools.data.DataStoreFinder;
@@ -108,6 +109,47 @@ public class ShapefileReaderImpl implements ShapefileReader {
         }
     }
 
+    /**
+     * 使用模板处理Shapefile ZIP文件
+     */
+    public int processShapefileZipWithTemplate(InputStream zipInputStream, String fileName,
+                                              com.zjxy.gisdataimport.entity.GisManageTemplate template) {
+        Long startTime = System.currentTimeMillis();
+        totalFeaturesProcessed = 0;
+
+        // 测试准备工作
+        testDataService.prepareForTest();
+
+        // 开始性能监控
+        performanceMonitor.startMonitoring();
+
+        try {
+            // 创建临时目录来存放解压后的文件
+            Path tempDir = Files.createTempDirectory("shapefile-temp");
+            unzip(zipInputStream, tempDir.toFile(), Charset.forName("GBK"));
+
+            processShapefileFromTempDirWithTemplate(tempDir, template);
+
+            // 删除临时目录及其内容
+            deleteDirectory(tempDir.toFile());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("处理Shapefile ZIP文件失败", e);
+        }
+
+        Long endTime = System.currentTimeMillis();
+
+        // 完成性能监控
+        performanceMonitor.finishMonitoring();
+
+        // 显示测试结果
+        testDataService.showTestResults();
+
+        System.out.println("模板化处理完成，总共导入 " + totalFeaturesProcessed + " 条记录，耗时：" + (endTime - startTime) + "毫秒");
+        return totalFeaturesProcessed;
+    }
+
     private void processShapefileFromTempDir(Path tempDir) throws Exception {
         // 查找解压后的SHP文件
         File shpFile = findShpFile(tempDir.toFile());
@@ -160,6 +202,57 @@ public class ShapefileReaderImpl implements ShapefileReader {
                 // 生产模式：使用优化方法处理全部数据
                 processShapefileWithOptimizedBatching(collection, schema);
             }
+
+        } finally {
+            // 关闭DataStore
+            if (dataStore != null) {
+                dataStore.dispose();
+            }
+        }
+    }
+
+    private void processShapefileFromTempDirWithTemplate(Path tempDir, GisManageTemplate template) throws Exception {
+        // 查找解压后的SHP文件
+        File shpFile = findShpFile(tempDir.toFile());
+        if (shpFile == null) {
+            throw new FileNotFoundException("在ZIP文件中未找到.shp文件");
+        }
+
+        // 创建参数映射并指定编码
+        Map<String, Object> params = new HashMap<>();
+        params.put("url", shpFile.toURI().toURL());
+        params.put("charset", Charset.forName("GBK").name());
+
+        // 获取DataStore对象
+        DataStore dataStore = null;
+        try {
+            dataStore = DataStoreFinder.getDataStore(params);
+            if (dataStore == null) {
+                throw new IOException("无法创建DataStore");
+            }
+
+            // 获取类型名称（通常是文件名）
+            String typeName = dataStore.getTypeNames()[0];
+
+            // 获取FeatureSource对象
+            FeatureSource<SimpleFeatureType, SimpleFeature> source = dataStore.getFeatureSource(typeName);
+
+            // 获取FeatureCollection对象
+            FeatureCollection<SimpleFeatureType, SimpleFeature> collection = source.getFeatures();
+
+            // 获取Schema
+            SimpleFeatureType schema = source.getSchema();
+
+            // 使用模板化的优化批量处理
+            System.out.println("=== 模板化处理模式 ===");
+            System.out.println("模板ID: " + template.getId());
+            System.out.println("模板名称: " + template.getNameZh());
+            System.out.println("源坐标系: " + template.getOriginalCoordinateSystem());
+            System.out.println("目标坐标系: " + template.getTargetCoordinateSystem());
+            System.out.println("坐标转换: " + (template.getIsZh() != null && template.getIsZh() ? "启用" : "禁用"));
+            System.out.println("==================");
+
+            processShapefileWithOptimizedBatching(collection, schema, template);
 
         } finally {
             // 关闭DataStore
@@ -299,6 +392,15 @@ public class ShapefileReaderImpl implements ShapefileReader {
      */
     private void processShapefileWithOptimizedBatching(FeatureCollection<SimpleFeatureType, SimpleFeature> collection,
                                                       SimpleFeatureType schema) throws Exception {
+        processShapefileWithOptimizedBatching(collection, schema, null);
+    }
+
+    /**
+     * 优化的批量处理方案 - 支持模板化坐标转换
+     */
+    private void processShapefileWithOptimizedBatching(FeatureCollection<SimpleFeatureType, SimpleFeature> collection,
+                                                      SimpleFeatureType schema,
+                                                      GisManageTemplate template) throws Exception {
         final int LARGE_BATCH_SIZE = BatchProcessingConfig.BatchConstants.LARGE_BATCH_SIZE;
         final int THREAD_COUNT = Math.min(Runtime.getRuntime().availableProcessors() * 2,
                                          BatchProcessingConfig.BatchConstants.MAX_THREAD_COUNT);
@@ -323,10 +425,10 @@ public class ShapefileReaderImpl implements ShapefileReader {
 
                 if (!largeBatch.isEmpty()) {
                     // 提交批次处理任务
-                    Future<Integer> future = executor.submit(() -> processLargeBatch(largeBatch, schema));
+                    Future<Integer> future = executor.submit(() -> processLargeBatch(largeBatch, schema, template));
                     futures.add(future);
 
-                     System.out.println("优化方法 - 提交批次处理任务，批次大小: " + largeBatch.size() +
+                    System.out.println("优化方法 - 提交批次处理任务，批次大小: " + largeBatch.size() +
                                       ", 已提交批次数: " + futures.size() +
                                       ", 累计处理: " + totalProcessedInTest + " 条");
                 }
@@ -351,6 +453,14 @@ public class ShapefileReaderImpl implements ShapefileReader {
      * 处理大批次数据 - 使用JDBC批量插入优化性能
      */
     private Integer processLargeBatch(List<SimpleFeature> features, SimpleFeatureType schema) {
+        return processLargeBatch(features, schema, null);
+    }
+
+    /**
+     * 处理大批次数据 - 支持模板化处理
+     */
+    private Integer processLargeBatch(List<SimpleFeature> features, SimpleFeatureType schema,
+                                     com.zjxy.gisdataimport.entity.GisManageTemplate template) {
         long startTime = System.currentTimeMillis();
 
         try {
@@ -358,7 +468,7 @@ public class ShapefileReaderImpl implements ShapefileReader {
             List<GeoFeatureEntity> entities = new ArrayList<>(features.size());
 
             for (SimpleFeature feature : features) {
-                GeoFeatureEntity geoFeature = convertFeatureToEntity(feature, schema);
+                GeoFeatureEntity geoFeature = convertFeatureToEntity(feature, schema, template);
                 entities.add(geoFeature);
             }
 
@@ -370,10 +480,6 @@ public class ShapefileReaderImpl implements ShapefileReader {
 
             // 记录性能监控数据
             performanceMonitor.recordBatchCompleted(entities.size(), processingTime);
-
-            // System.out.println("批次处理完成 - 线程: " + Thread.currentThread().getName() +
-            //                  ", 处理数量: " + entities.size() +
-            //                  ", 耗时: " + processingTime + "ms");
 
             return entities.size();
 
@@ -389,6 +495,14 @@ public class ShapefileReaderImpl implements ShapefileReader {
      * 将SimpleFeature转换为GeoFeatureEntity
      */
     private GeoFeatureEntity convertFeatureToEntity(SimpleFeature feature, SimpleFeatureType schema) {
+        return convertFeatureToEntity(feature, schema, null);
+    }
+
+    /**
+     * 将SimpleFeature转换为GeoFeatureEntity - 支持模板化转换
+     */
+    private GeoFeatureEntity convertFeatureToEntity(SimpleFeature feature, SimpleFeatureType schema,
+                                                   com.zjxy.gisdataimport.entity.GisManageTemplate template) {
         GeoFeatureEntity geoFeature = new GeoFeatureEntity();
 
         // 设置要素ID
@@ -399,16 +513,28 @@ public class ShapefileReaderImpl implements ShapefileReader {
             feature.getDefaultGeometryProperty().getValue() != null) {
             try {
                 String originalGeometryStr = feature.getDefaultGeometryProperty().getValue().toString();
+                String transformedGeometryStr;
 
-                // 进行坐标转换（使用配置的坐标系）
-                String transformedGeometryStr = coordinateTransformService.transformGeometry(originalGeometryStr);
+                // 根据是否有模板选择转换方式
+                if (template != null) {
+                    // 使用模板化坐标转换
+                    transformedGeometryStr = applyTemplateCoordinateTransform(originalGeometryStr, template);
+
+                    if (testConfig.isVerboseLogging() && !originalGeometryStr.equals(transformedGeometryStr)) {
+                        System.out.println("模板坐标转换: " + template.getOriginalCoordinateSystem() +
+                                         " -> " + template.getTargetCoordinateSystem() +
+                                         ": " + originalGeometryStr + " -> " + transformedGeometryStr);
+                    }
+                } else {
+                    // 使用默认坐标转换
+                    transformedGeometryStr = coordinateTransformService.transformGeometry(originalGeometryStr);
+
+                    if (testConfig.isVerboseLogging() && !originalGeometryStr.equals(transformedGeometryStr)) {
+                        System.out.println("默认坐标转换: " + originalGeometryStr + " -> " + transformedGeometryStr);
+                    }
+                }
 
                 geoFeature.setGeometry(transformedGeometryStr);
-
-                // 可选：记录转换日志（仅在调试时启用）
-                if (testConfig.isVerboseLogging() && !originalGeometryStr.equals(transformedGeometryStr)) {
-                    System.out.println("坐标转换: " + originalGeometryStr + " -> " + transformedGeometryStr);
-                }
 
             } catch (Exception e) {
                 // 静默处理几何信息转换异常，避免输出详细参数
@@ -433,6 +559,35 @@ public class ShapefileReaderImpl implements ShapefileReader {
         return geoFeature;
     }
 
+    /**
+     * 应用模板化坐标转换
+     */
+    private String applyTemplateCoordinateTransform(String geometryWkt, com.zjxy.gisdataimport.entity.GisManageTemplate template) {
+        try {
+            // 检查模板是否启用坐标转换
+            if (template.getIsZh() == null || !template.getIsZh()) {
+                return geometryWkt; // 不进行转换
+            }
+
+            // 获取模板中的坐标系配置
+            String sourceCoordSystem = template.getOriginalCoordinateSystem();
+            String targetCoordSystem = template.getTargetCoordinateSystem();
+
+            if (sourceCoordSystem == null || targetCoordSystem == null) {
+                System.err.println("模板中坐标系配置不完整，使用默认转换");
+                return coordinateTransformService.transformGeometry(geometryWkt);
+            }
+
+            // 使用模板配置进行坐标转换
+            return coordinateTransformService.transformGeometryWithCoordSystems(
+                geometryWkt, sourceCoordSystem, targetCoordSystem);
+
+        } catch (Exception e) {
+            System.err.println("模板化坐标转换失败: " + e.getMessage());
+            return geometryWkt; // 返回原始数据
+        }
+    }
+
     private String convertMapToJson(Map<String, Object> map) {
         StringBuilder json = new StringBuilder("{");
         boolean first = true;
@@ -448,5 +603,4 @@ public class ShapefileReaderImpl implements ShapefileReader {
         json.append("}");
         return json.toString();
     }
-
 }
