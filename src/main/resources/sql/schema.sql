@@ -1,22 +1,22 @@
--- 创建GIS数据导入数据库表
-CREATE DATABASE IF NOT EXISTS gisdb DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- 1. 建表
+CREATE TABLE IF NOT EXISTS "public"."t_gas_point_cs" (
+                                                         "id"  SERIAL PRIMARY KEY,
+                                                         "geom" GEOMETRY(POINT, 4326),
+                                                         "gjz"  VARCHAR(255),
+                                                         "x"    DOUBLE PRECISION,
+                                                         "y"    DOUBLE PRECISION
+);
 
-USE gisdb;
+-- 2. 空间索引
+CREATE INDEX IF NOT EXISTS "idx_t_gas_point_cs_geom"
+    ON "public"."t_gas_point_cs" USING GIST ("geom");
 
--- 地理要素表
-drop  table if exists geo_features;
-CREATE TABLE IF NOT EXISTS geo_features (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '主键ID',
-    feature_id VARCHAR(255) NOT NULL COMMENT '要素ID',
-    geometry LONGTEXT COMMENT '几何信息(WKT格式)',
-    attributes LONGTEXT COMMENT '属性信息(JSON格式)',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    INDEX idx_feature_id (feature_id),
-    INDEX idx_created_at (created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='地理要素数据表';
+-- 3. 表注释
+COMMENT ON TABLE "public"."t_gas_point_cs" IS '模板生成: 燃气点位测试表';
 
--- 优化表结构用于大数据量插入
--- 设置合适的存储引擎参数
-ALTER TABLE geo_features
-    ENGINE=InnoDB
-    ROW_FORMAT=DYNAMIC;
+-- 4. 字段注释
+COMMENT ON COLUMN "public"."t_gas_point_cs"."id"  IS '主键';
+COMMENT ON COLUMN "public"."t_gas_point_cs"."geom" IS '空间坐标（WGS84）';
+COMMENT ON COLUMN "public"."t_gas_point_cs"."gjz"  IS '关键字';
+COMMENT ON COLUMN "public"."t_gas_point_cs"."x"    IS '经度';
+COMMENT ON COLUMN "public"."t_gas_point_cs"."y"    IS '纬度';

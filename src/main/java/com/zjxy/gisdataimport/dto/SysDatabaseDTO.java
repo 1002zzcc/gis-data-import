@@ -1,62 +1,53 @@
 package com.zjxy.gisdataimport.dto;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
 import lombok.Data;
+
+import java.io.Serializable;
+import java.util.Date;
 
 /**
  * 系统数据库DTO
  */
 @Data
-public class SysDatabaseDTO {
-    
-    private Integer id;
-    
-    /**
-     * 数据库中文名称
-     */
-    private String nameZh;
-    
-    /**
-     * 数据库英文名称
-     */
+public class SysDatabaseDTO implements Serializable {
+
+    @TableId(type = IdType.ASSIGN_UUID)
+    private String id;
+
+    @TableField(value = "name_en")
     private String nameEn;
-    
-    /**
-     * 数据库IP地址
-     */
+
+    @TableField(value = "name_zh")
+    private String nameZh;
+
+
+    @TableField(value = "ip")
     private String ip;
-    
-    /**
-     * 数据库端口
-     */
+
+    @TableField(value = "port")
     private String port;
-    
-    /**
-     * 数据库用户名
-     */
+
+    @TableField(value = "username")
     private String username;
-    
-    /**
-     * 数据库密码（Base64编码）
-     */
-    private String password;
-    
-    /**
-     * 数据库类型
-     */
+
+    @TableField(value = "password")
+    private byte[] password;
+
+    @TableField(value = "type")
     private String type;
-    
-    /**
-     * 数据库驱动
-     */
+
+    @TableField(value = "driver")
     private String driver;
-    
-    /**
-     * 是否启用
-     */
+
+    @TableField(value = "enabled")
     private Boolean enabled;
-    
-    /**
-     * 描述
-     */
+
+    @TableField(value = "description")
     private String description;
+
+    @TableField(value = "createdate")
+    private Date createDate;
 }

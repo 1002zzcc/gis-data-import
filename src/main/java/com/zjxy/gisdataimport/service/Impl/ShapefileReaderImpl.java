@@ -6,6 +6,11 @@ import com.zjxy.gisdataimport.shap.ShapefileReader;
 import org.geotools.data.DataStore;
 import org.geotools.data.DataStoreFinder;
 import org.geotools.data.FeatureSource;
+import org.geotools.data.FileDataStore;
+import org.geotools.data.FileDataStoreFinder;
+import org.geotools.data.simple.SimpleFeatureCollection;
+import org.geotools.data.simple.SimpleFeatureIterator;
+import org.geotools.data.simple.SimpleFeatureSource;
 import org.geotools.feature.FeatureCollection;
 import org.geotools.feature.FeatureIterator;
 import org.opengis.feature.simple.SimpleFeature;
@@ -35,7 +40,9 @@ import com.zjxy.gisdataimport.service.BatchInsertService;
 import com.zjxy.gisdataimport.service.CoordinateTransformService;
 import com.zjxy.gisdataimport.config.BatchProcessingConfig;
 import com.zjxy.gisdataimport.config.TestConfig;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 public class ShapefileReaderImpl implements ShapefileReader {
 
@@ -602,5 +609,86 @@ public class ShapefileReaderImpl implements ShapefileReader {
         }
         json.append("}");
         return json.toString();
+    }
+
+    @Override
+    public List<SimpleFeature> readFeatures(String shapefilePath) throws IOException {
+        List<SimpleFeature> features = new ArrayList<>();
+
+        try {
+            // 创建文件对象
+            File shapeFile = new File(shapefilePath);
+            if (!shapeFile.exists()) {
+                throw new IOException("Shapefile不存在: " + shapefilePath);
+            }
+
+            // 创建数据存储
+            FileDataStore dataStore = FileDataStoreFinder.getDataStore(shapeFile);
+            if (dataStore == null) {
+                throw new IOException("无法创建数据存储，可能不是有效的Shapefile: " + shapefilePath);
+            }
+
+            try {
+                // 获取要素源
+                SimpleFeatureSource featureSource = dataStore.getFeatureSource();
+
+                // 获取要素集合
+                SimpleFeatureCollection featureCollection = featureSource.getFeatures();
+
+                // 转换为列表
+                try (SimpleFeatureIterator iterator = featureCollection.features()) {
+                    while (iterator.hasNext()) {
+                        features.add(iterator.next());
+                    }
+                }
+
+                log.info("成功读取Shapefile: {}, 要素数量: {}", shapefilePath, features.size());
+
+            } finally {
+                dataStore.dispose();
+            }
+
+        } catch (Exception e) {
+            log.error("读取Shapefile失败: {}", shapefilePath, e);
+            throw new IOException("读取Shapefile失败: " + e.getMessage(), e);
+        }
+
+        return features;
+    }
+
+    @Override
+    public SimpleFeatureType getSchema(String shapefilePath) throws IOException {
+        try {
+            // 创建文件对象
+            File shapeFile = new File(shapefilePath);
+            if (!shapeFile.exists()) {
+                throw new IOException("Shapefile不存在: " + shapefilePath);
+            }
+
+            // 创建数据存储
+            FileDataStore dataStore = FileDataStoreFinder.getDataStore(shapeFile);
+            if (dataStore == null) {
+                throw new IOException("无法创建数据存储，可能不是有效的Shapefile: " + shapefilePath);
+            }
+
+            try {
+                // 获取要素源
+                SimpleFeatureSource featureSource = dataStore.getFeatureSource();
+
+                // 获取模式
+                SimpleFeatureType schema = featureSource.getSchema();
+
+                log.info("成功获取Shapefile模式: {}, 字段数量: {}", shapefilePath, schema.getAttributeCount());
+
+                return schema;
+
+            } finally {
+                dataStore.dispose();
+            }
+
+        } catch (Exception e) {
+            log.error("获取Shapefile模式失败: {}", shapefilePath, e);
+            throw new IOException("获取Shapefile模式失败: " + e.getMessage(), e);
+        }
     }
 }

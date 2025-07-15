@@ -96,14 +96,6 @@ public interface GisManageTemplateService extends IService<GisManageTemplate> {
     Boolean deleteTemplate(Integer templateId);
 
     /**
-     * 验证模板配置
-     *
-     * @param template 模板信息
-     * @return 验证结果
-     */
-    Boolean validateTemplate(GisManageTemplate template);
-    
-    /**
      * 分页查询模板
      *
      * @param id 模板ID
@@ -115,7 +107,7 @@ public interface GisManageTemplateService extends IService<GisManageTemplate> {
      * @return 模板分页结果
      */
     Page<GisManageTemplate> getTemplatesPage(Integer id, String tableName, String nameZh, String dataBase, Long pageSize, Long pageIndex);
-    
+
     /**
      * 根据数据库名称获取模板列表
      *
@@ -123,7 +115,7 @@ public interface GisManageTemplateService extends IService<GisManageTemplate> {
      * @return 模板列表
      */
     List<GisManageTemplate> getTemplatesByDatabase(String database);
-    
+
     /**
      * 根据应用ID和分组获取模板列表
      *
@@ -134,4 +126,6 @@ public interface GisManageTemplateService extends IService<GisManageTemplate> {
      * @return 模板列表
      */
     List<GisManageTemplate> getTemplatesByAppIdAndGroups(String appId, String groups, String templateType, String inOrOut);
+
+
 }

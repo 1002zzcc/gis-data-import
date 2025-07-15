@@ -73,7 +73,7 @@ public class GisManageTemplateServiceImpl extends ServiceImpl<GisManageTemplateM
         if (StringUtils.hasText(inOrOut)) {
             queryWrapper.eq("in_or_out", inOrOut);
         }
-        
+
         List<GisManageTemplate> templates = templateMapper.selectList(queryWrapper);
         log.info("根据分组 {} 查询到 {} 个模板", groups, templates.size());
         return templates;
@@ -131,17 +131,6 @@ public class GisManageTemplateServiceImpl extends ServiceImpl<GisManageTemplateM
             throw new IllegalArgumentException("模板信息不能为空");
         }
 
-        // 验证必填字段
-        validateRequiredFields(template);
-        
-        // 验证字段映射是否存在重复
-        validateDuplicateFields(template);
-
-        // 验证模板配置
-        if (!validateTemplate(template)) {
-            throw new RuntimeException("模板配置验证失败");
-        }
-
         // 设置创建时间
         template.setCreateTime(new Date());
 
@@ -172,11 +161,6 @@ public class GisManageTemplateServiceImpl extends ServiceImpl<GisManageTemplateM
         GisManageTemplate existingTemplate = templateMapper.selectById(template.getId());
         if (existingTemplate == null) {
             throw new RuntimeException("要更新的模板不存在");
-        }
-
-        // 验证模板配置
-        if (!validateTemplate(template)) {
-            throw new RuntimeException("模板配置验证失败");
         }
 
         int result = templateMapper.updateById(template);
@@ -210,12 +194,12 @@ public class GisManageTemplateServiceImpl extends ServiceImpl<GisManageTemplateM
             return false;
         }
     }
-    
+
     @Override
     public Page<GisManageTemplate> getTemplatesPage(Integer id, String tableName, String nameZh, String dataBase, Long pageSize, Long pageIndex) {
         Page<GisManageTemplate> page = new Page<>(pageIndex, pageSize);
         QueryWrapper<GisManageTemplate> queryWrapper = new QueryWrapper<>();
-        
+
         if (id != null) {
             queryWrapper.eq("id", id);
         }
@@ -228,17 +212,17 @@ public class GisManageTemplateServiceImpl extends ServiceImpl<GisManageTemplateM
         if (StringUtils.hasText(dataBase)) {
             queryWrapper.eq("data_base", dataBase);
         }
-        
+
         queryWrapper.orderByAsc("create_time");
         return templateMapper.selectPage(page, queryWrapper);
     }
-    
+
     @Override
     public List<GisManageTemplate> getTemplatesByDatabase(String database) {
         if (!StringUtils.hasText(database)) {
             throw new IllegalArgumentException("数据库名称不能为空");
         }
-        
+
         QueryWrapper<GisManageTemplate> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("data_base", database);
         return templateMapper.selectList(queryWrapper);
@@ -247,7 +231,7 @@ public class GisManageTemplateServiceImpl extends ServiceImpl<GisManageTemplateM
     @Override
     public List<GisManageTemplate> getTemplatesByAppIdAndGroups(String appId, String groups, String templateType, String inOrOut) {
         QueryWrapper<GisManageTemplate> queryWrapper = new QueryWrapper<>();
-        
+
         if (StringUtils.hasText(appId)) {
             queryWrapper.eq("app_id", appId);
         }
@@ -257,112 +241,14 @@ public class GisManageTemplateServiceImpl extends ServiceImpl<GisManageTemplateM
         if (StringUtils.hasText(templateType)) {
             queryWrapper.eq("template_type", templateType);
         }
-        
+
         if (!StringUtils.hasText(inOrOut)) {
             inOrOut = "in";
         }
         queryWrapper.eq("in_or_out", inOrOut);
-        
+
         List<GisManageTemplate> templates = templateMapper.selectList(queryWrapper);
         log.info("查询到 {} 个模板", templates.size());
         return templates;
-    }
-
-    @Override
-    public Boolean validateTemplate(GisManageTemplate template) {
-        if (template == null) {
-            log.error("模板信息为空");
-            return false;
-        }
-
-        try {
-            // 验证基本字段
-            if (!StringUtils.hasText(template.getTableName())) {
-                log.error("目标表名不能为空");
-                return false;
-            }
-
-            if (!StringUtils.hasText(template.getNameZh())) {
-                log.error("模板中文名称不能为空");
-                return false;
-            }
-
-            // 验证几何类型
-            if (template.getType() != null && (template.getType() < 1 || template.getType() > 3)) {
-                log.error("几何类型必须在1-3之间");
-                return false;
-            }
-
-            // 验证字段映射配置
-            List<Map<String, Object>> fieldMappings = template.getMap();
-            if (fieldMappings != null && !fieldMappings.isEmpty()) {
-                for (Map<String, Object> mapping : fieldMappings) {
-                    if (!mapping.containsKey("shpFieldName") || !mapping.containsKey("fieldName")) {
-                        log.error("字段映射配置缺少必要字段");
-                        return false;
-                    }
-                }
-            }
-
-            // 验证坐标转换配置
-            if (Boolean.TRUE.equals(template.getIsZh())) {
-                if (!StringUtils.hasText(template.getOriginalCoordinateSystem()) ||
-                    !StringUtils.hasText(template.getTargetCoordinateSystem())) {
-                    log.error("启用坐标转换时，源坐标系和目标坐标系不能为空");
-                    return false;
-                }
-            }
-
-            log.info("模板配置验证通过");
-            return true;
-
-        } catch (Exception e) {
-            log.error("模板配置验证异常", e);
-            return false;
-        }
-    }
-
-    /**
-     * 验证必填字段
-     */
-    private void validateRequiredFields(GisManageTemplate template) {
-        if (!StringUtils.hasText(template.getTableName())) {
-            throw new IllegalArgumentException("目标表名不能为空");
-        }
-
-        if (!StringUtils.hasText(template.getNameZh())) {
-            throw new IllegalArgumentException("模板中文名称不能为空");
-        }
-
-        if (!StringUtils.hasText(template.getDataBase())) {
-            throw new IllegalArgumentException("数据库名称不能为空");
-        }
-    }
-    
-    /**
-     * 验证字段映射是否存在重复
-     */
-    private void validateDuplicateFields(GisManageTemplate template) {
-        List<Map<String, Object>> map = template.getMap();
-        String templateType = template.getTemplateType();
-        String inOrOut = template.getInOrOut();
-        
-        if ((inOrOut == null || "in".equals(inOrOut)) && 
-            (("excel".equals(templateType) || "shp".equals(templateType)) && map != null)) {
-            
-            List<String> duplicatedFields = map.stream()
-                .filter(m -> (m.get("checked") != null && (Boolean) m.get("checked")))
-                .map(m -> m.get("fieldName").toString())
-                .collect(Collectors.toMap(e -> e, e -> 1, Integer::sum))
-                .entrySet()
-                .stream()
-                .filter(e -> e.getValue() > 1)
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-                
-            if (!duplicatedFields.isEmpty()) {
-                throw new RuntimeException("这些元素存在重复: " + duplicatedFields.toString());
-            }
-        }
     }
 }

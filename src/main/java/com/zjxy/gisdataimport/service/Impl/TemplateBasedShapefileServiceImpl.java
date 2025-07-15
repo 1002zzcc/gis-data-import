@@ -9,6 +9,7 @@ import com.zjxy.gisdataimport.service.DataSourceService;
 import com.zjxy.gisdataimport.service.GisManageTemplateService;
 import com.zjxy.gisdataimport.service.TemplateBasedShapefileService;
 import com.zjxy.gisdataimport.shap.ShapefileReader;
+import com.zjxy.gisdataimport.util.TemplateFieldMappingUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
@@ -36,6 +37,9 @@ public class TemplateBasedShapefileServiceImpl implements TemplateBasedShapefile
 
     @Autowired
     private CoordinateTransformService coordinateTransformService;
+
+    @Autowired
+    private TemplateFieldMappingUtil fieldMappingUtil;
 
     @Override
     public Map<String, Object> processShapefileWithTemplate(InputStream zipInputStream, String fileName, Integer templateId) {
@@ -135,35 +139,53 @@ public class TemplateBasedShapefileServiceImpl implements TemplateBasedShapefile
 
     @Override
     public GeoFeatureEntity convertFeatureWithTemplate(SimpleFeature feature, SimpleFeatureType schema, GisManageTemplate template) {
-        // 基础实现：使用默认转换逻辑
         GeoFeatureEntity entity = new GeoFeatureEntity();
 
-        // 设置要素ID
-        entity.setFeatureId(feature.getID());
+        try {
+            // 设置要素ID
+            entity.setFeatureId(feature.getID());
 
-        // 处理几何信息
-        if (feature.getDefaultGeometryProperty() != null && feature.getDefaultGeometryProperty().getValue() != null) {
-            String geometryWkt = feature.getDefaultGeometryProperty().getValue().toString();
-            String transformedWkt = applyCoordinateTransformWithTemplate(geometryWkt, template);
-            entity.setGeometry(transformedWkt);
-        }
-
-        // 处理属性信息
-        Map<String, Object> attributes = new HashMap<>();
-        Map<String, String> fieldMapping = getFieldMappingFromTemplate(template);
-
-        for (int i = 0; i < schema.getAttributeCount(); i++) {
-            String attributeName = schema.getDescriptor(i).getLocalName();
-            Object attributeValue = feature.getAttribute(attributeName);
-
-            if (attributeValue != null) {
-                // 应用字段映射
-                String mappedName = fieldMapping.getOrDefault(attributeName, attributeName);
-                attributes.put(mappedName, attributeValue.toString());
+            // 处理几何信息
+            if (feature.getDefaultGeometryProperty() != null && feature.getDefaultGeometryProperty().getValue() != null) {
+                String geometryWkt = feature.getDefaultGeometryProperty().getValue().toString();
+                String transformedWkt = applyCoordinateTransformWithTemplate(geometryWkt, template);
+                entity.setGeometry(transformedWkt);
             }
-        }
 
-        entity.setAttributes(convertMapToJson(attributes));
+            // 处理属性信息
+            Map<String, Object> attributes = new HashMap<>();
+            Map<String, String> fieldMapping = fieldMappingUtil.extractFieldMapping(template);
+            Map<String, String> fieldTypeMapping = fieldMappingUtil.extractFieldTypeMapping(template);
+
+            // 遍历Shapefile中的所有字段
+            for (int i = 0; i < schema.getAttributeCount(); i++) {
+                String shpFieldName = schema.getDescriptor(i).getLocalName();
+                Object shpFieldValue = feature.getAttribute(shpFieldName);
+
+                // 检查该字段是否在映射配置中
+                if (fieldMapping.containsKey(shpFieldName)) {
+                    String dbFieldName = fieldMapping.get(shpFieldName);
+                    String dbFieldType = fieldTypeMapping.get(shpFieldName);
+
+                    // 根据目标数据库字段类型进行值转换
+                    Object convertedValue = fieldMappingUtil.convertValueToTargetType(
+                        shpFieldValue, dbFieldType, shpFieldName);
+                    attributes.put(dbFieldName, convertedValue);
+
+                    log.debug("字段映射: {} ({}) -> {} ({}), 原始值: {}, 转换值: {}",
+                        shpFieldName,
+                        shpFieldValue != null ? shpFieldValue.getClass().getSimpleName() : "null",
+                        dbFieldName, dbFieldType, shpFieldValue, convertedValue);
+                }
+            }
+
+            entity.setAttributes(convertMapToJson(attributes));
+            log.debug("成功转换要素: {}, 属性数量: {}", feature.getID(), attributes.size());
+
+        } catch (Exception e) {
+            log.error("转换要素失败: {}", e.getMessage(), e);
+            throw new RuntimeException("转换要素失败: " + e.getMessage(), e);
+        }
 
         return entity;
     }
@@ -203,13 +225,10 @@ public class TemplateBasedShapefileServiceImpl implements TemplateBasedShapefile
 
     @Override
     public Map<String, String> getFieldMappingFromTemplate(GisManageTemplate template) {
-        Map<String, String> mapping = new HashMap<>();
-
-        // 基础实现：返回默认映射
-        // 在实际应用中，这里应该解析模板配置中的字段映射规则
-
-        return mapping;
+        return fieldMappingUtil.extractFieldMapping(template);
     }
+
+
 
     @Override
     public String applyCoordinateTransformWithTemplate(String geometryWkt, GisManageTemplate template) {
@@ -264,10 +283,53 @@ public class TemplateBasedShapefileServiceImpl implements TemplateBasedShapefile
     public Map<String, Object> getTargetTableInfoFromTemplate(GisManageTemplate template) {
         Map<String, Object> tableInfo = new HashMap<>();
 
-        // 基础实现：返回默认表信息
-        tableInfo.put("tableName", "geo_features");
-        tableInfo.put("schema", "public");
-        tableInfo.put("database", template.getDataBase());
+        try {
+            // 从模板获取目标表信息
+            String tableName = template.getTableName();
+            String dataBase = template.getDataBase();
+            String dataBaseMode = template.getDataBaseMode();
+
+            // 设置表名
+            if (tableName != null && !tableName.trim().isEmpty()) {
+                tableInfo.put("tableName", tableName);
+            } else {
+                tableInfo.put("tableName", "geo_features"); // 默认表名
+                log.warn("模板中未配置表名，使用默认表名: geo_features");
+            }
+
+            // 设置数据库模式
+            if (dataBaseMode != null && !dataBaseMode.trim().isEmpty()) {
+                tableInfo.put("schema", dataBaseMode);
+            } else {
+                tableInfo.put("schema", "public"); // 默认模式
+            }
+
+            // 设置数据库
+            if (dataBase != null && !dataBase.trim().isEmpty()) {
+                tableInfo.put("database", dataBase);
+            } else {
+                log.warn("模板中未配置数据库信息");
+            }
+
+            // 设置数据源名称
+            String datasourceName = template.getDatasourceName();
+            if (datasourceName != null && !datasourceName.trim().isEmpty()) {
+                tableInfo.put("datasource", datasourceName);
+            } else {
+                tableInfo.put("datasource", "master"); // 默认数据源
+            }
+
+            log.info("目标表信息: 数据源={}, 数据库={}, 模式={}, 表名={}",
+                tableInfo.get("datasource"), tableInfo.get("database"),
+                tableInfo.get("schema"), tableInfo.get("tableName"));
+
+        } catch (Exception e) {
+            log.error("获取目标表信息失败: {}", e.getMessage(), e);
+            // 设置默认值
+            tableInfo.put("tableName", "geo_features");
+            tableInfo.put("schema", "public");
+            tableInfo.put("datasource", "master");
+        }
 
         return tableInfo;
     }

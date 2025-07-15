@@ -1,6 +1,11 @@
 package com.zjxy.gisdataimport.shap;
 
+import org.opengis.feature.simple.SimpleFeature;
+import org.opengis.feature.simple.SimpleFeatureType;
+
+import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 
 /**
  * Shapefile读取服务接口
@@ -23,4 +28,22 @@ public interface ShapefileReader {
      * @return 处理的要素数量
      */
     int processShapefileZipFromPath(String zipFilePath);
+
+    /**
+     * 从Shapefile路径读取要素列表
+     *
+     * @param shapefilePath Shapefile文件路径
+     * @return 要素列表
+     * @throws IOException 读取异常
+     */
+    List<SimpleFeature> readFeatures(String shapefilePath) throws IOException;
+
+    /**
+     * 从Shapefile路径获取要素类型模式
+     *
+     * @param shapefilePath Shapefile文件路径
+     * @return 要素类型模式
+     * @throws IOException 读取异常
+     */
+    SimpleFeatureType getSchema(String shapefilePath) throws IOException;
 }

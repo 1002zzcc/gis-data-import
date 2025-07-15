@@ -5,12 +5,13 @@ import com.zjxy.gisdataimport.config.dynamic.DataSourceUtils;
 import com.zjxy.gisdataimport.config.dynamic.DynamicDataSourceHolder;
 import com.zjxy.gisdataimport.dto.SysDatabaseDTO;
 import com.zjxy.gisdataimport.entity.GisManageDataSource;
+import com.zjxy.gisdataimport.mapper.DataSourceMapper;
 import com.zjxy.gisdataimport.service.DataSourceService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.Base64;
+
 
 /**
  * 数据源服务实现类
@@ -18,6 +19,7 @@ import java.util.Base64;
 @Service
 @Slf4j
 public class DataSourceServiceImpl implements DataSourceService {
+    DataSourceMapper dataSourceMapper;
 
     @Autowired
     private DataSourceUtils dataSourceUtils;
@@ -32,8 +34,8 @@ public class DataSourceServiceImpl implements DataSourceService {
         }else{
             GisManageDataSource gisManageDataSource = new GisManageDataSource();
             gisManageDataSource.setDriver("org.postgresql.Driver");
-            // 解码Base64密码
-            gisManageDataSource.setPassword(new String(Base64.getDecoder().decode(sysDatabaseDTO.getPassword())));
+            // 直接使用byte[]密码
+            gisManageDataSource.setPassword(new String(sysDatabaseDTO.getPassword()));
             gisManageDataSource.setUsername(sysDatabaseDTO.getUsername());
             gisManageDataSource.setUrl(getPostgreSqlUrl(sysDatabaseDTO));
             DruidDataSource dataSourceConnection = dataSourceUtils.createDataSourceConnection(gisManageDataSource);
@@ -52,16 +54,7 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     @Override
     public SysDatabaseDTO selectByDatabaseName(String databaseName) {
-        // 这里可以从配置文件或数据库中查询数据库信息
-        // 暂时返回默认配置
-        SysDatabaseDTO sysDatabaseDTO = new SysDatabaseDTO();
-        sysDatabaseDTO.setNameEn(databaseName);
-        sysDatabaseDTO.setIp("192.168.1.250");
-        sysDatabaseDTO.setPort("5438");
-        sysDatabaseDTO.setUsername("root");
-        sysDatabaseDTO.setPassword(Base64.getEncoder().encodeToString("root".getBytes()));
-        sysDatabaseDTO.setType("postgresql");
-        sysDatabaseDTO.setDriver("org.postgresql.Driver");
+        SysDatabaseDTO sysDatabaseDTO = dataSourceMapper.selectByDatabaseName(databaseName);
         return sysDatabaseDTO;
     }
 
@@ -70,7 +63,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         try {
             GisManageDataSource gisManageDataSource = new GisManageDataSource();
             gisManageDataSource.setDriver("org.postgresql.Driver");
-            gisManageDataSource.setPassword(new String(Base64.getDecoder().decode(sysDatabaseDTO.getPassword())));
+            gisManageDataSource.setPassword(new String(sysDatabaseDTO.getPassword()));
             gisManageDataSource.setUsername(sysDatabaseDTO.getUsername());
             gisManageDataSource.setUrl(getPostgreSqlUrl(sysDatabaseDTO));
 
