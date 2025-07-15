@@ -44,7 +44,22 @@ public class GisManageTemplateServiceImpl extends ServiceImpl<GisManageTemplateM
             throw new RuntimeException("未找到ID为 " + templateId + " 的模板");
         }
 
-        log.info("获取模板成功，模板ID: {}, 模板名称: {}", templateId, template.getNameZh());
+        // 详细调试日志
+        log.info("=== 模板详细信息调试 ===");
+        log.info("模板ID: {}", template.getId());
+        log.info("模板名称: {}", template.getNameZh());
+        log.info("目标表名: {}", template.getTableName());
+        log.info("源坐标系: {}", template.getOriginalCoordinateSystem());
+        log.info("目标坐标系: {}", template.getTargetCoordinateSystem());
+        log.info("坐标转换: {}", template.getIsZh());
+        log.info("模板类型: {}", template.getType());
+        log.info("数据库名: {}", template.getDataBase());
+        log.info("字段映射JSON: {}", template.getMapJson());
+        log.info("是否使用自定义表: {}", template.getTableName() != null &&
+                !template.getTableName().trim().isEmpty() &&
+                !"geo_features".equals(template.getTableName()));
+        log.info("=== 模板调试信息结束 ===");
+
         return template;
     }
 

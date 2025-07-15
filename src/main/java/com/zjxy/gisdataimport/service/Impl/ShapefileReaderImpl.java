@@ -38,6 +38,7 @@ import com.zjxy.gisdataimport.service.PerformanceMonitor;
 import com.zjxy.gisdataimport.service.TestDataService;
 import com.zjxy.gisdataimport.service.BatchInsertService;
 import com.zjxy.gisdataimport.service.CoordinateTransformService;
+import com.zjxy.gisdataimport.service.TemplateBasedDatabaseInsertService;
 import com.zjxy.gisdataimport.config.BatchProcessingConfig;
 import com.zjxy.gisdataimport.config.TestConfig;
 import lombok.extern.slf4j.Slf4j;
@@ -46,8 +47,8 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class ShapefileReaderImpl implements ShapefileReader {
 
-    @Autowired
-    private com.zjxy.gisdataimport.mapper.GeoFeatureMapper geoFeatureMapper;
+    // 注意：GeoFeatureMapper 已移除，GeoFeatureEntity 现在是中间态对象
+    // private com.zjxy.gisdataimport.mapper.GeoFeatureMapper geoFeatureMapper;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -66,6 +67,9 @@ public class ShapefileReaderImpl implements ShapefileReader {
 
     @Autowired
     private CoordinateTransformService coordinateTransformService;
+
+    @Autowired
+    private TemplateBasedDatabaseInsertService templateBasedDatabaseInsertService;
 
     private int totalFeaturesProcessed = 0;
 
@@ -389,8 +393,9 @@ public class ShapefileReaderImpl implements ShapefileReader {
             // 设置属性JSON
             geoFeature.setAttributes(convertMapToJson(attributes));
 
-            // 保存到数据库 (原始方法：逐条保存)
-            geoFeatureMapper.insert(geoFeature);
+            // 注意：不再直接保存到数据库，GeoFeatureEntity 现在是中间态对象
+            // 数据应该通过模板配置插入到目标表
+            log.debug("处理了地理要素: {}", geoFeature.getFeatureId());
         }
     }
 
@@ -479,8 +484,28 @@ public class ShapefileReaderImpl implements ShapefileReader {
                 entities.add(geoFeature);
             }
 
-            // 使用MyBatis-Plus批量插入
-            batchInsertService.fastBatchInsert(entities);
+            // 预处理地理要素数据（GeoFeatureEntity 现在是中间态）
+            batchInsertService.batchPreprocessGeoFeatures(entities);
+
+            // 如果有模板配置，使用模板化插入到目标表
+            if (template != null) {
+                try {
+                    Map<String, Object> insertResult = templateBasedDatabaseInsertService.batchInsertWithTemplate(entities, template);
+                    boolean success = (Boolean) insertResult.getOrDefault("success", false);
+                    if (success) {
+                        int insertedCount = (Integer) insertResult.getOrDefault("insertedCount", 0);
+                        log.info("成功插入 {} 条记录到目标表: {}", insertedCount, template.getTableName());
+                    } else {
+                        String message = (String) insertResult.getOrDefault("message", "未知错误");
+                        log.warn("插入到目标表失败: {}", message);
+                    }
+                } catch (Exception e) {
+                    log.error("使用模板插入数据失败", e);
+                }
+            } else {
+                // 没有模板配置，只是预处理数据
+                log.warn("ShapefileReader 处理了 {} 条记录，但未插入到数据库（没有模板配置）", entities.size());
+            }
 
             long endTime = System.currentTimeMillis();
             long processingTime = endTime - startTime;
@@ -556,23 +581,38 @@ public class ShapefileReaderImpl implements ShapefileReader {
             String attributeName = schema.getDescriptor(i).getLocalName();
             Object attributeValue = feature.getAttribute(attributeName);
             if (attributeValue != null) {
-                attributes.put(attributeName, attributeValue.toString());
+                attributes.put(attributeName, attributeValue);  // 保持原始类型
             }
         }
 
-        // 设置属性JSON
-        geoFeature.setAttributes(convertMapToJson(attributes));
+        // 设置原始属性（保持原始数据类型）
+        geoFeature.setRawAttributes(attributes);
+
+        // 设置属性JSON（转换为字符串格式，用于兼容）
+        Map<String, Object> stringAttributes = new HashMap<>();
+        for (Map.Entry<String, Object> entry : attributes.entrySet()) {
+            stringAttributes.put(entry.getKey(), entry.getValue() != null ? entry.getValue().toString() : null);
+        }
+        geoFeature.setAttributes(convertMapToJson(stringAttributes));
 
         return geoFeature;
     }
 
     /**
      * 应用模板化坐标转换
+     * 根据模板中的originalCoordinateSystem，targetCoordinateSystem，isZh字段判断是否进行坐标转换
      */
     private String applyTemplateCoordinateTransform(String geometryWkt, com.zjxy.gisdataimport.entity.GisManageTemplate template) {
         try {
+            // 检查几何数据是否有效
+            if (geometryWkt == null || geometryWkt.trim().isEmpty()) {
+                log.warn("几何数据为空，无法进行坐标转换");
+                return geometryWkt;
+            }
+
             // 检查模板是否启用坐标转换
             if (template.getIsZh() == null || !template.getIsZh()) {
+                log.debug("模板未启用坐标转换 (isZh={}), 返回原始几何数据", template.getIsZh());
                 return geometryWkt; // 不进行转换
             }
 
@@ -580,17 +620,50 @@ public class ShapefileReaderImpl implements ShapefileReader {
             String sourceCoordSystem = template.getOriginalCoordinateSystem();
             String targetCoordSystem = template.getTargetCoordinateSystem();
 
-            if (sourceCoordSystem == null || targetCoordSystem == null) {
-                System.err.println("模板中坐标系配置不完整，使用默认转换");
-                return coordinateTransformService.transformGeometry(geometryWkt);
+            // 验证坐标系配置
+            if (sourceCoordSystem == null || sourceCoordSystem.trim().isEmpty()) {
+                log.warn("模板中源坐标系(originalCoordinateSystem)未配置，无法进行坐标转换");
+                return geometryWkt;
             }
 
+            if (targetCoordSystem == null || targetCoordSystem.trim().isEmpty()) {
+                log.warn("模板中目标坐标系(targetCoordinateSystem)未配置，无法进行坐标转换");
+                return geometryWkt;
+            }
+
+            // 检查源坐标系和目标坐标系是否相同
+            if (sourceCoordSystem.equals(targetCoordSystem)) {
+                log.debug("源坐标系和目标坐标系相同 ({})，无需转换", sourceCoordSystem);
+                return geometryWkt;
+            }
+
+            // 检查坐标系是否受支持
+            if (!coordinateTransformService.isSupportedCoordSystem(sourceCoordSystem)) {
+                log.warn("源坐标系 {} 不受支持，无法进行坐标转换", sourceCoordSystem);
+                return geometryWkt;
+            }
+
+            if (!coordinateTransformService.isSupportedCoordSystem(targetCoordSystem)) {
+                log.warn("目标坐标系 {} 不受支持，无法进行坐标转换", targetCoordSystem);
+                return geometryWkt;
+            }
+
+            log.debug("执行坐标转换: {} -> {}", sourceCoordSystem, targetCoordSystem);
+
             // 使用模板配置进行坐标转换
-            return coordinateTransformService.transformGeometryWithCoordSystems(
+            String transformedWkt = coordinateTransformService.transformGeometryWithCoordSystems(
                 geometryWkt, sourceCoordSystem, targetCoordSystem);
 
+            // 检查转换结果
+            if (transformedWkt == null) {
+                log.warn("坐标转换返回null，使用原始几何数据");
+                return geometryWkt;
+            }
+
+            return transformedWkt;
+
         } catch (Exception e) {
-            System.err.println("模板化坐标转换失败: " + e.getMessage());
+            log.error("模板化坐标转换失败: {}", e.getMessage(), e);
             return geometryWkt; // 返回原始数据
         }
     }

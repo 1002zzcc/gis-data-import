@@ -98,19 +98,24 @@ public class TemplateBasedDatabaseInsertServiceImpl implements TemplateBasedData
         long startTime = System.currentTimeMillis();
 
         try {
-            // 使用现有的批量插入服务
-            batchInsertService.fastBatchInsert(entities);
+            // 预处理地理要素数据
+            batchInsertService.batchPreprocessGeoFeatures(entities);
+
+            // 注意：GeoFeatureEntity 现在是中间态，不直接插入到 geo_features 表
+            // 实际的数据库插入应该通过模板配置插入到目标表
+            log.warn("BatchInsertService 不再支持直接插入到 geo_features 表，请使用模板化插入");
 
             long endTime = System.currentTimeMillis();
             long processingTime = endTime - startTime;
 
-            result.put("success", true);
-            result.put("insertedCount", entities.size());
+            result.put("success", false);
+            result.put("insertedCount", 0);
             result.put("processingTime", processingTime);
             result.put("tableName", "geo_features");
-            result.put("message", "成功插入 " + entities.size() + " 条记录到默认表");
+            result.put("message", "不再支持插入到默认的 geo_features 表，请配置自定义目标表");
+            result.put("note", "数据已预处理但未插入数据库，请使用自定义表配置");
 
-            log.info("成功插入 {} 条记录到默认表 geo_features，耗时: {}ms", entities.size(), processingTime);
+            log.warn("尝试插入到默认表 geo_features，但此功能已禁用。数据已预处理 {} 条记录，耗时: {}ms", entities.size(), processingTime);
 
         } catch (Exception e) {
             log.error("插入到默认表失败", e);
@@ -183,12 +188,22 @@ public class TemplateBasedDatabaseInsertServiceImpl implements TemplateBasedData
                 dbFields.add(geometryField);
             }
 
-            // 4. 构建INSERT SQL
+            // 4. 构建INSERT SQL - 特殊处理几何字段
             StringBuilder sql = new StringBuilder();
             sql.append("INSERT INTO ").append(tableName).append(" (");
             sql.append(String.join(", ", dbFields));
             sql.append(") VALUES (");
-            sql.append(String.join(", ", Collections.nCopies(dbFields.size(), "?")));
+
+            // 为每个字段构建占位符，几何字段使用 ST_GeomFromText(?)
+            List<String> placeholders = new ArrayList<>();
+            for (String field : dbFields) {
+                if (field.equals(geometryField)) {
+                    placeholders.add("ST_GeomFromText(?, 4326)");  // 使用 SRID 4326
+                } else {
+                    placeholders.add("?");
+                }
+            }
+            sql.append(String.join(", ", placeholders));
             sql.append(")");
 
             // 5. 构建参数列表
@@ -224,15 +239,48 @@ public class TemplateBasedDatabaseInsertServiceImpl implements TemplateBasedData
         // 解析实体的属性JSON
         Map<String, Object> attributes = parseAttributesJson(entity.getAttributes());
         
+        // 创建反向映射：从数据库字段名到Shapefile字段名
+        Map<String, String> reverseFieldMapping = new HashMap<>();
+        for (Map.Entry<String, String> entry : fieldMapping.entrySet()) {
+            reverseFieldMapping.put(entry.getValue(), entry.getKey());
+        }
+
         for (int i = 0; i < dbFields.size(); i++) {
             String dbField = dbFields.get(i);
-            
+
             if (dbField.equals(geometryField)) {
-                // 几何字段
-                params[i] = entity.getGeometry();
+                // 几何字段 - 确保传递 WKT 字符串给 ST_GeomFromText()
+                String geometryWkt = entity.getGeometry();
+                if (geometryWkt != null && !geometryWkt.trim().isEmpty()) {
+                    params[i] = geometryWkt;
+                } else {
+                    params[i] = null;  // 如果几何为空，插入 NULL
+                }
+                log.debug("几何字段 {} 设置值: {}", dbField, geometryWkt != null ? geometryWkt.substring(0, Math.min(50, geometryWkt.length())) + "..." : null);
             } else {
-                // 属性字段
-                params[i] = attributes.get(dbField);
+                // 属性字段 - 根据字段映射获取对应的Shapefile字段值
+                Object value = null;
+                String shpFieldName = reverseFieldMapping.get(dbField);
+
+                if (shpFieldName != null && entity.getRawAttributes() != null) {
+                    value = entity.getRawAttributes().get(shpFieldName);
+                    log.debug("属性字段映射: {} ({}) -> {} ({}), 值: {}",
+                        shpFieldName, shpFieldName, dbField, dbField, value);
+                }
+
+                // 如果还是没有找到，尝试直接用数据库字段名查找
+                if (value == null && entity.getRawAttributes() != null) {
+                    value = entity.getRawAttributes().get(dbField);
+                    log.debug("直接字段查找: {} -> 值: {}", dbField, value);
+                }
+
+                // 最后尝试从解析的JSON属性中获取
+                if (value == null) {
+                    value = attributes.get(dbField);
+                    log.debug("JSON属性查找: {} -> 值: {}", dbField, value);
+                }
+
+                params[i] = value;
             }
         }
         
@@ -320,24 +368,52 @@ public class TemplateBasedDatabaseInsertServiceImpl implements TemplateBasedData
     @Override
     public Map<String, Object> validateTargetTableStructure(GisManageTemplate template) {
         Map<String, Object> result = new HashMap<>();
-        
+
         try {
-            // 简单验证：检查表是否存在
+            // 详细验证模板配置
+            List<String> issues = new ArrayList<>();
+
+            // 检查表名
             String tableName = template.getTableName();
             if (tableName == null || tableName.trim().isEmpty()) {
-                result.put("valid", false);
-                result.put("message", "模板中未配置目标表名");
-                return result;
+                issues.add("目标表名为空");
             }
-            
-            result.put("valid", true);
-            result.put("message", "表结构验证通过");
-            
+
+            // 检查模板名称
+            if (template.getNameZh() == null || template.getNameZh().trim().isEmpty()) {
+                issues.add("模板名称为空");
+            }
+
+            // 检查字段映射配置
+            if (template.getMapJson() == null || template.getMapJson().trim().isEmpty()) {
+                issues.add("字段映射配置为空");
+            }
+
+            // 检查坐标系配置（如果启用了坐标转换）
+            if (template.getIsZh() != null && template.getIsZh()) {
+                if (template.getOriginalCoordinateSystem() == null || template.getOriginalCoordinateSystem().trim().isEmpty()) {
+                    issues.add("启用了坐标转换但源坐标系为空");
+                }
+                if (template.getTargetCoordinateSystem() == null || template.getTargetCoordinateSystem().trim().isEmpty()) {
+                    issues.add("启用了坐标转换但目标坐标系为空");
+                }
+            }
+
+            if (issues.isEmpty()) {
+                result.put("valid", true);
+                result.put("message", "模板配置验证通过");
+            } else {
+                result.put("valid", false);
+                result.put("message", "模板配置验证失败: " + String.join(", ", issues));
+                result.put("issues", issues);
+                result.put("suggestion", "请检查模板ID " + template.getId() + " 的配置，确保所有必要字段都已正确设置");
+            }
+
         } catch (Exception e) {
             result.put("valid", false);
-            result.put("message", "表结构验证失败: " + e.getMessage());
+            result.put("message", "模板配置验证失败: " + e.getMessage());
         }
-        
+
         return result;
     }
 

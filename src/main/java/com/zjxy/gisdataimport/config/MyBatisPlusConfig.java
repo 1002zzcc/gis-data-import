@@ -30,13 +30,17 @@ public class MyBatisPlusConfig {
 
     /**
      * 自动填充处理器
+     *
+     * 注意：GeoFeatureEntity 已移除数据库映射注解，不再需要自动填充
+     * 此处保留配置以支持其他实体类的自动填充需求
      */
     @Component
     public static class MyMetaObjectHandler implements MetaObjectHandler {
 
         @Override
         public void insertFill(MetaObject metaObject) {
-            // 插入时自动填充创建时间
+            // 插入时自动填充创建时间（适用于其他实体类）
+            this.strictInsertFill(metaObject, "createTime", LocalDateTime.class, LocalDateTime.now());
             this.strictInsertFill(metaObject, "createdAt", LocalDateTime.class, LocalDateTime.now());
         }
 

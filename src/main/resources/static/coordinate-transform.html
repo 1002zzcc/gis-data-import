@@ -105,7 +105,7 @@
 <body>
     <div class="container">
         <h1>🗺️ 坐标转换工具</h1>
-        
+
         <!-- 导航菜单 -->
         <div style="margin-bottom: 30px; padding: 15px; background-color: #ecf0f1; border-radius: 5px;">
             <h3>功能导航</h3>
@@ -121,6 +121,7 @@
                 <label>源坐标系:</label>
                 <select id="sourceCoordSystem">
                     <option value="CGCS2000">CGCS2000</option>
+                    <option value="WenZhou2000">WenZhou2000</option>
                     <option value="Beijing1954">Beijing1954</option>
                     <option value="Xian1980">Xian1980</option>
                     <option value="WGS1984">WGS1984</option>
@@ -130,6 +131,7 @@
                 <label>目标坐标系:</label>
                 <select id="targetCoordSystem">
                     <option value="CGCS2000XY">CGCS2000XY</option>
+                    <option value="CGCS2000">CGCS2000</option>
                     <option value="Beijing1954XY">Beijing1954XY</option>
                     <option value="Xian1980XY">Xian1980XY</option>
                     <option value="WGS1984XY">WGS1984XY</option>
@@ -247,7 +249,7 @@
             // 解析坐标数据
             const lines = batchText.trim().split('\n');
             const coordinates = [];
-            
+
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (line) {

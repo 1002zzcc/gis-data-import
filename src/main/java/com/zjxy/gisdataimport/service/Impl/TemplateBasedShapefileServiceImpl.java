@@ -233,9 +233,15 @@ public class TemplateBasedShapefileServiceImpl implements TemplateBasedShapefile
     @Override
     public String applyCoordinateTransformWithTemplate(String geometryWkt, GisManageTemplate template) {
         try {
+            // 检查几何数据是否有效
+            if (geometryWkt == null || geometryWkt.trim().isEmpty()) {
+                log.warn("几何数据为空，无法进行坐标转换");
+                return geometryWkt;
+            }
+
             // 检查模板是否启用坐标转换
             if (template.getIsZh() == null || !template.getIsZh()) {
-                log.debug("模板未启用坐标转换，返回原始几何数据");
+                log.debug("模板未启用坐标转换 (isZh={}), 返回原始几何数据", template.getIsZh());
                 return geometryWkt;
             }
 
@@ -243,15 +249,47 @@ public class TemplateBasedShapefileServiceImpl implements TemplateBasedShapefile
             String sourceCoordSystem = template.getOriginalCoordinateSystem();
             String targetCoordSystem = template.getTargetCoordinateSystem();
 
-            if (sourceCoordSystem == null || targetCoordSystem == null) {
-                log.warn("模板中坐标系配置不完整，使用默认转换");
-                return coordinateTransformService.transformGeometry(geometryWkt);
+            // 验证坐标系配置
+            if (sourceCoordSystem == null || sourceCoordSystem.trim().isEmpty()) {
+                log.warn("模板中源坐标系(originalCoordinateSystem)未配置，无法进行坐标转换");
+                return geometryWkt;
             }
 
+            if (targetCoordSystem == null || targetCoordSystem.trim().isEmpty()) {
+                log.warn("模板中目标坐标系(targetCoordinateSystem)未配置，无法进行坐标转换");
+                return geometryWkt;
+            }
+
+            // 检查源坐标系和目标坐标系是否相同
+            if (sourceCoordSystem.equals(targetCoordSystem)) {
+                log.debug("源坐标系和目标坐标系相同 ({})，无需转换", sourceCoordSystem);
+                return geometryWkt;
+            }
+
+            // 检查坐标系是否受支持
+            if (!coordinateTransformService.isSupportedCoordSystem(sourceCoordSystem)) {
+                log.warn("源坐标系 {} 不受支持，无法进行坐标转换", sourceCoordSystem);
+                return geometryWkt;
+            }
+
+            if (!coordinateTransformService.isSupportedCoordSystem(targetCoordSystem)) {
+                log.warn("目标坐标系 {} 不受支持，无法进行坐标转换", targetCoordSystem);
+                return geometryWkt;
+            }
+
+            log.debug("执行坐标转换: {} -> {}", sourceCoordSystem, targetCoordSystem);
+
             // 使用模板配置进行坐标转换
-            log.debug("使用模板进行坐标转换: {} -> {}", sourceCoordSystem, targetCoordSystem);
-            return coordinateTransformService.transformGeometryWithCoordSystems(
+            String transformedWkt = coordinateTransformService.transformGeometryWithCoordSystems(
                 geometryWkt, sourceCoordSystem, targetCoordSystem);
+
+            // 检查转换结果
+            if (transformedWkt == null) {
+                log.warn("坐标转换返回null，使用原始几何数据");
+                return geometryWkt;
+            }
+
+            return transformedWkt;
 
         } catch (Exception e) {
             log.warn("模板化坐标转换失败，使用原始几何数据: {}", e.getMessage());

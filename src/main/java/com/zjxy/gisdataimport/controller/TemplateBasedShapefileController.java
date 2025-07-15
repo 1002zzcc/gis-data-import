@@ -506,7 +506,7 @@ public class TemplateBasedShapefileController {
 
         try {
             // 使用现有的批量插入服务
-            batchInsertService.fastBatchInsert(entities);
+            batchInsertService.batchPreprocessGeoFeatures(entities);
 
             result.put("success", true);
             result.put("insertedCount", entities.size());
