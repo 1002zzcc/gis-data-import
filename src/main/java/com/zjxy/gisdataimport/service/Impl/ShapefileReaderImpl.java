@@ -479,6 +479,7 @@ public class ShapefileReaderImpl implements ShapefileReader {
             // 转换为实体对象列表
             List<GeoFeatureEntity> entities = new ArrayList<>(features.size());
 
+            // 逐个处理要素，确保坐标转换准确性
             for (SimpleFeature feature : features) {
                 GeoFeatureEntity geoFeature = convertFeatureToEntity(feature, schema, template);
                 entities.add(geoFeature);
@@ -764,4 +765,6 @@ public class ShapefileReaderImpl implements ShapefileReader {
             throw new IOException("获取Shapefile模式失败: " + e.getMessage(), e);
         }
     }
+
+
 }

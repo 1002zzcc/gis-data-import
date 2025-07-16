@@ -1,22 +1,52 @@
--- 1. 建表
-CREATE TABLE IF NOT EXISTS "public"."t_gas_point_cs" (
-                                                         "id"  SERIAL PRIMARY KEY,
-                                                         "geom" GEOMETRY(POINT, 4326),
-                                                         "gjz"  VARCHAR(255),
-                                                         "x"    DOUBLE PRECISION,
-                                                         "y"    DOUBLE PRECISION
+CREATE TABLE t_gas_point_cs (
+                                gid SERIAL PRIMARY KEY,
+                                geom GEOMETRY(POINT, 4326),
+                                gjz VARCHAR(255),
+                                id VARCHAR(255),
+                                project VARCHAR(255),
+                                type_ VARCHAR(255),
+                                location VARCHAR(255),
+                                roadname VARCHAR(255),
+                                date_i VARCHAR(255),
+                                comp_name VARCHAR(255),
+                                depth DOUBLE PRECISION,
+                                pressure_l VARCHAR(255),
+                                networkdiv VARCHAR(255),
+                                diameter VARCHAR(255),
+                                material VARCHAR(255),
+                                standard VARCHAR(255),
+                                bdh VARCHAR(255),
+                                elev DOUBLE PRECISION,
+                                elev_f DOUBLE PRECISION,
+                                sszs VARCHAR(255),
+                                ssqx VARCHAR(255),
+                                x DOUBLE PRECISION,
+                                memo VARCHAR(255),
+                                sblb_1 VARCHAR(255),
+                                y DOUBLE PRECISION,
+                                author VARCHAR(255),
+                                inp_date DATE,
+                                reducing_d DOUBLE PRECISION,
+                                id_1 DOUBLE PRECISION,
+                                wz VARCHAR(255),
+                                xt VARCHAR(255),
+                                type_1 DOUBLE PRECISION,
+                                mapnum VARCHAR(255),
+                                dlx VARCHAR(255),
+                                fsw VARCHAR(255),
+                                ljwd DOUBLE PRECISION,
+                                msfs VARCHAR(255),
+                                sjzhj VARCHAR(255),
+                                zflx DOUBLE PRECISION,
+                                ljxs DOUBLE PRECISION,
+                                sdh VARCHAR(255),
+                                elev_d DOUBLE PRECISION,
+                                sgy VARCHAR(255),
+                                status VARCHAR(255),
+                                sblb VARCHAR(255),
+                                gd_type VARCHAR(255),
+                                point_type VARCHAR(255),
+                                transport VARCHAR(255)
 );
 
--- 2. 空间索引
-CREATE INDEX IF NOT EXISTS "idx_t_gas_point_cs_geom"
-    ON "public"."t_gas_point_cs" USING GIST ("geom");
 
--- 3. 表注释
-COMMENT ON TABLE "public"."t_gas_point_cs" IS '模板生成: 燃气点位测试表';
-
--- 4. 字段注释
-COMMENT ON COLUMN "public"."t_gas_point_cs"."id"  IS '主键';
-COMMENT ON COLUMN "public"."t_gas_point_cs"."geom" IS '空间坐标（WGS84）';
-COMMENT ON COLUMN "public"."t_gas_point_cs"."gjz"  IS '关键字';
-COMMENT ON COLUMN "public"."t_gas_point_cs"."x"    IS '经度';
-COMMENT ON COLUMN "public"."t_gas_point_cs"."y"    IS '纬度';

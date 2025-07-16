@@ -49,15 +49,15 @@ public class CoordinateTransformService {
                 return geometryWkt;
             }
 
-            if (config.isLogTransformation()) {
-                log.info("开始坐标转换: {} -> {}, WKT: {}", sourceCoordSystem, targetCoordSystem, geometryWkt);
-            }
+//            if (config.isLogTransformation()) {
+//                log.info("开始坐标转换: {} -> {}, WKT: {}", sourceCoordSystem, targetCoordSystem, geometryWkt);
+//            }
 
             String transformedWkt = ZbzhUtil.convertSingleGeometry(geometryWkt, sourceCoordSystem, targetCoordSystem);
 
-            if (config.isLogTransformation()) {
-                log.info("坐标转换完成: {}", transformedWkt);
-            }
+//            if (config.isLogTransformation()) {
+//                log.info("坐标转换完成: {}", transformedWkt);
+//            }
 
             return transformedWkt;
 

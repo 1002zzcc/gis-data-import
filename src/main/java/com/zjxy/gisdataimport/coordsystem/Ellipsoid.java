@@ -8,7 +8,6 @@ public class Ellipsoid {
     private double m_SemiMajorAxis;
     private double m_SemiMinorAxis;
     private double m_FlatRate;
-    
     public Ellipsoid(){
         m_Name = "";
         m_Type = EllipsoidType.Userdefined;
@@ -16,7 +15,6 @@ public class Ellipsoid {
         m_SemiMinorAxis = 0;
         m_FlatRate = 0;
     }
-    
     public Ellipsoid(String type){
         if(type.equals("Beijing1954")){
             setSemiMajorAxis(6378245);
@@ -44,7 +42,50 @@ public class Ellipsoid {
             m_Name = type;
         }
     }
-    
+    public Ellipsoid(EllipsoidType type){
+        m_Type = EllipsoidType.Userdefined;
+        switch (getType())
+        {
+            case Beijing1954:
+                //SemiMajorAxis = 6378245;
+                setSemiMajorAxis(6378245);
+                //FlatRate = 0.00335232986925914;
+                //FlatRate = 0.0033523299;
+                setFlatRate(0.0033523299);
+                break;
+            case Xian1980:
+                //SemiMajorAxis = 6378140;
+                setSemiMajorAxis(6378140);
+                //FlatRate = 0.003352813;
+                setFlatRate(0.003352813);
+                break;
+            case WGS1984:
+                //SemiMajorAxis = 6378137;
+                setSemiMajorAxis(6378137);
+                //FlatRate = 0.0033528107;
+                setFlatRate(0.0033528107);
+                break;
+            case CGCS2000:
+                //SemiMajorAxis = 6378137;
+                setSemiMajorAxis(6378137);
+                //FlatRate = 0.00335281068118232;
+                setFlatRate(0.00335281068118232);
+                break;
+            case EPSG900913:
+                //SemiMajorAxis = 6378137;
+                setSemiMajorAxis(6378137);
+                //FlatRate = 0;
+                setFlatRate(0);
+                break;
+            default:break;
+        }
+        if (m_Type != EllipsoidType.Userdefined)
+        {
+            m_Name = m_Type.toString();
+        }
+        m_Type = type;
+    }
+
     public String getName(){
         return m_Name;
     }
@@ -83,6 +124,13 @@ public class Ellipsoid {
         {
             m_FlatRate = (m_SemiMajorAxis - m_SemiMinorAxis) / m_SemiMajorAxis;
         }
+        else
+        {
+            if (m_FlatRate > 0)
+            {
+                m_SemiMajorAxis = m_SemiMinorAxis / (1 - m_FlatRate);
+            }
+        }
     }
     public double getFlatRate(){
         return m_FlatRate;
@@ -92,6 +140,13 @@ public class Ellipsoid {
         if (m_SemiMajorAxis > 0)
         {
             m_SemiMinorAxis = m_SemiMajorAxis * (1 - m_FlatRate);
+        }
+        else
+        {
+            if (m_SemiMinorAxis > 0)
+            {
+                m_SemiMajorAxis = m_SemiMinorAxis / (1 - m_FlatRate);
+            }
         }
     }
 

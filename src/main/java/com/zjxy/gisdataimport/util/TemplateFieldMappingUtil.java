@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.Calendar;
 
 /**
  * 模板字段映射工具类
@@ -22,11 +23,20 @@ public class TemplateFieldMappingUtil {
      */
     private static final String[] DATE_PATTERNS = {
         "yyyy-MM-dd",
-        "yyyy/MM/dd", 
+        "yyyy/MM/dd",
         "dd/MM/yyyy",
         "MM/dd/yyyy",
         "yyyy-MM-dd HH:mm:ss",
-        "yyyy/MM/dd HH:mm:ss"
+        "yyyy/MM/dd HH:mm:ss",
+        "EEE MMM dd HH:mm:ss zzz yyyy",  // Sat Jan 01 00:00:00 CST 2000
+        "EEE MMM dd HH:mm:ss yyyy",      // Sat Jan 01 00:00:00 2000
+        "MMM dd, yyyy",                  // Jan 01, 2000
+        "dd-MMM-yyyy",                   // 01-Jan-2000
+        "yyyy-MM-dd'T'HH:mm:ss",         // ISO format
+        "yyyy-MM-dd'T'HH:mm:ss.SSS",     // ISO with milliseconds
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",      // ISO with Z
+        "dd.MM.yyyy",                    // European format
+        "MM-dd-yyyy"                     // US format
     };
 
     /**
@@ -71,10 +81,10 @@ public class TemplateFieldMappingUtil {
      */
     public Map<String, String> extractFieldTypeMapping(GisManageTemplate template) {
         Map<String, String> typeMapping = new HashMap<>();
-        
+
         try {
             List<Map<String, Object>> mapConfig = template.getMap();
-            
+
             if (mapConfig != null && !mapConfig.isEmpty()) {
                 for (Map<String, Object> fieldConfig : mapConfig) {
                     Boolean checked = (Boolean) fieldConfig.get("checked");
@@ -82,7 +92,7 @@ public class TemplateFieldMappingUtil {
                         String shpFieldName = (String) fieldConfig.get("shpFieldName");
                         String shpFieldType = (String) fieldConfig.get("shpFieldType");
                         String dbFieldType = (String) fieldConfig.get("fieldType");
-                        
+
                         if (shpFieldName != null && dbFieldType != null && !dbFieldType.trim().isEmpty()) {
                             typeMapping.put(shpFieldName, dbFieldType);
                             log.debug("添加类型映射: {} ({}) -> {}", shpFieldName, shpFieldType, dbFieldType);
@@ -90,12 +100,48 @@ public class TemplateFieldMappingUtil {
                     }
                 }
             }
-            
+
         } catch (Exception e) {
             log.error("提取字段类型映射失败: {}", e.getMessage(), e);
         }
-        
+
         return typeMapping;
+    }
+
+    /**
+     * 从模板配置中提取数据库字段类型映射关系
+     * @param template 模板配置
+     * @return 字段类型映射Map，key为数据库字段名，value为数据库字段类型
+     */
+    public Map<String, String> extractDbFieldTypeMapping(GisManageTemplate template) {
+        Map<String, String> dbTypeMapping = new HashMap<>();
+
+        try {
+            List<Map<String, Object>> mapConfig = template.getMap();
+
+            if (mapConfig != null && !mapConfig.isEmpty()) {
+                for (Map<String, Object> fieldConfig : mapConfig) {
+                    Boolean checked = (Boolean) fieldConfig.get("checked");
+                    if (checked != null && checked) {
+                        String dbFieldName = (String) fieldConfig.get("fieldName");
+                        String dbFieldType = (String) fieldConfig.get("fieldType");
+                        String shpFieldType = (String) fieldConfig.get("shpFieldType");
+
+                        if (dbFieldName != null && dbFieldType != null && !dbFieldType.trim().isEmpty()) {
+                            dbTypeMapping.put(dbFieldName, dbFieldType);
+                            log.debug("添加数据库字段类型映射: {} -> {} (来源: {})", dbFieldName, dbFieldType, shpFieldType);
+                        }
+                    }
+                }
+            }
+
+            log.info("从模板解析到 {} 个数据库字段类型映射", dbTypeMapping.size());
+
+        } catch (Exception e) {
+            log.error("提取数据库字段类型映射失败: {}", e.getMessage(), e);
+        }
+
+        return dbTypeMapping;
     }
 
     /**
@@ -112,19 +158,63 @@ public class TemplateFieldMappingUtil {
 
         try {
             String valueStr = value.toString().trim();
-            
+
             // 处理空字符串
             if (valueStr.isEmpty()) {
                 return null;
             }
 
+            // 特殊处理：如果目标类型是date，但值是数字，进行特殊转换
+            if ("date".equalsIgnoreCase(targetType) && value instanceof Number) {
+                return handleNumericDateConversion((Number) value, shpFieldName);
+            }
+
             // 根据目标类型进行转换
             return performTypeConversion(valueStr, targetType);
-            
+
         } catch (Exception e) {
-            log.warn("字段 {} 的值类型转换失败: {} -> {}, 错误: {}, 使用原始值", 
+            log.warn("字段 {} 的值类型转换失败: {} -> {}, 错误: {}, 使用原始值",
                 shpFieldName, value, targetType, e.getMessage());
             return value;
+        }
+    }
+
+    /**
+     * 处理数值类型的日期转换
+     */
+    private Object handleNumericDateConversion(Number numericValue, String fieldName) {
+        try {
+            long longValue = numericValue.longValue();
+
+            // 如果是4位数字，可能是年份
+            if (longValue >= 1900 && longValue <= 2100) {
+                Calendar cal = Calendar.getInstance();
+                cal.set((int) longValue, Calendar.JANUARY, 1, 0, 0, 0);
+                cal.set(Calendar.MILLISECOND, 0);
+                Date yearDate = cal.getTime();
+                log.debug("数值年份转换成功: {} -> {}", numericValue, yearDate);
+                return yearDate;
+            }
+
+            // 如果是更大的数字，可能是时间戳
+            // 调整时间戳判断逻辑：先判断是否为毫秒时间戳（13位数字）
+            if (longValue >= 1000000000000L) { // 毫秒时间戳（13位数字）
+                Date timestampDate = new Date(longValue);
+                log.debug("数值毫秒时间戳转换成功: {} -> {}", numericValue, timestampDate);
+                return timestampDate;
+            } else if (longValue >= 946684800L && longValue <= 4102444800L) { // 秒时间戳范围：2000-2100年
+                Date timestampDate = new Date(longValue * 1000);
+                log.debug("数值秒时间戳转换成功: {} -> {}", numericValue, timestampDate);
+                return timestampDate;
+            }
+
+            // 如果都不匹配，返回原始值
+            log.warn("无法识别的数值日期格式: {}, 字段: {}", numericValue, fieldName);
+            return numericValue;
+
+        } catch (Exception e) {
+            log.warn("数值日期转换失败: {}, 字段: {}, 错误: {}", numericValue, fieldName, e.getMessage());
+            return numericValue;
         }
     }
 
@@ -255,15 +345,57 @@ public class TemplateFieldMappingUtil {
      * 解析日期
      */
     private Date parseDate(String value) {
+        log.debug("尝试解析日期: {}", value);
+
+        // 首先检查是否为纯数字（可能是时间戳或年份）
+        if (value.matches("^\\d+$")) {
+            try {
+                long numericValue = Long.parseLong(value);
+
+                // 如果是4位数字，可能是年份
+                if (numericValue >= 1900 && numericValue <= 2100) {
+                    // 将年份转换为该年的1月1日
+                    Calendar cal = Calendar.getInstance();
+                    cal.set((int) numericValue, Calendar.JANUARY, 1, 0, 0, 0);
+                    cal.set(Calendar.MILLISECOND, 0);
+                    Date yearDate = cal.getTime();
+                    log.debug("年份解析成功: {} -> {}", value, yearDate);
+                    return yearDate;
+                }
+
+                // 如果是更大的数字，可能是时间戳（毫秒或秒）
+                // 调整时间戳判断逻辑：先判断是否为毫秒时间戳（13位数字）
+                if (numericValue >= 1000000000000L) { // 毫秒时间戳（13位数字）
+                    // 毫秒时间戳
+                    Date timestampDate = new Date(numericValue);
+                    log.debug("毫秒时间戳解析成功: {} -> {}", value, timestampDate);
+                    return timestampDate;
+                } else if (numericValue >= 946684800L && numericValue <= 4102444800L) { // 秒时间戳范围：2000-2100年
+                    // 秒时间戳
+                    Date timestampDate = new Date(numericValue * 1000);
+                    log.debug("秒时间戳解析成功: {} -> {}", value, timestampDate);
+                    return timestampDate;
+                }
+            } catch (NumberFormatException e) {
+                log.trace("数字解析失败: {}", e.getMessage());
+            }
+        }
+
+        // 尝试标准日期格式
         for (String pattern : DATE_PATTERNS) {
             try {
-                SimpleDateFormat sdf = new SimpleDateFormat(pattern);
+                SimpleDateFormat sdf = new SimpleDateFormat(pattern, Locale.ENGLISH);
                 sdf.setLenient(false);
-                return sdf.parse(value);
-            } catch (ParseException ignored) {
+                Date parsedDate = sdf.parse(value);
+                log.debug("日期解析成功: {} -> {} (格式: {})", value, parsedDate, pattern);
+                return parsedDate;
+            } catch (ParseException e) {
+                log.trace("日期格式 {} 不匹配: {}", pattern, e.getMessage());
                 // 继续尝试下一个格式
             }
         }
+
+        log.warn("无法解析日期格式: {}, 尝试的格式: {}", value, String.join(", ", DATE_PATTERNS));
         throw new IllegalArgumentException("无法解析日期格式: " + value);
     }
 

@@ -22,17 +22,19 @@ spring:
           driver-class-name: org.postgresql.Driver
           type: com.alibaba.druid.pool.DruidDataSource
       druid:
-        initial-size: 20
+        initial-size: 10
         min-idle: 5
-        max-active: 200
-        max-wait: 6000000
-        time-between-eviction-runs-millis: 6000000
-        min-evictable-idle-time-millis: 30000000
+        max-active: 50
+        max-wait: 60000
+        time-between-eviction-runs-millis: 60000
+        min-evictable-idle-time-millis: 300000
         validation-query: SELECT 1
         test-while-idle: true
-        test-on-borrow: true
-        test-on-return: true
+        test-on-borrow: false
+        test-on-return: false
         pool-prepared-statements: true
+        # 批量插入优化
+        connection-properties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000;rewriteBatchedStatements=true
         
         # 监控配置
         stat-view-servlet:
